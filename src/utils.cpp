@@ -213,7 +213,7 @@ s32fp ProcessUdc(uint32_t oldTime, int motorSpeed)
     //Calculate "12V" supply voltage from voltage divider on mprot pin
     //1.2/(4.7+1.2)/3.33*4095 = 250 -> make it a bit less for pin losses etc
     //HW_REV1 had 3.9k resistors
-    int uauxGain = 289;
+    int uauxGain = 223;
     Param::SetFlt(Param::uaux, FP_DIV(AnaIn::uaux.Get(), uauxGain));
     udc = Param::Get(Param::udc);
     s32fp  udcfp = udc;
