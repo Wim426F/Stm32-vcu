@@ -146,8 +146,13 @@
     VALUE_ENTRY(Hour,          "H",   2065 ) \
     VALUE_ENTRY(Min,          "M",   2066 ) \
     VALUE_ENTRY(Sec,          "S",   2067 ) \
+    VALUE_ENTRY(Tire1_Speed,     "kph",   2068 ) \
+    VALUE_ENTRY(Tire2_Speed,     "kph",   2069 ) \
+    VALUE_ENTRY(Tire3_Speed,     "kph",   2070 ) \
+    VALUE_ENTRY(Tire4_Speed,     "kph",   2071 ) \
+    VALUE_ENTRY(DTC,    ONOFF,   2072 ) \
 
-//Next value Id: 2068
+//Next value Id: 2072
 
 #define VERSTR STRINGIFY(4=VER)
 #define dmodes     "0=CLOSED, 1=OPEN, 2=ERROR, 3=INVALID"

@@ -2,8 +2,6 @@
 #include "stm32_can.h"
 #include "params.h"
 
-BMW_E90Class E90Vehicle;
-
 #define PARK 0
 #define REVERSE 1
 #define NEUTRAL 2
@@ -104,6 +102,82 @@ void BMW_E90Class::Gear(int id, uint32_t data[2])
 
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void BMW_E90Class::Speed(int id, uint32_t data[2])
+{
+    uint8_t* bytes = (uint8_t*)data;// arrgghhh this converts the two 32bit array into bytes. See comments are useful:)
+    if (id == 0x1B4)
+    {
+        //uint16_t road_speed=((bytes[1]<<8)|(bytes[0]))-0x160;
+        uint16_t road_speed = (((bytes[1] - 192) * 256) + bytes[0] ) / 16; // speed in kmh
+        Param::SetInt(Param::Veh_Speed,road_speed);
+        if (bytes[5] == 0x32)
+        {
+            Param::SetInt(Param::handbrk, 1); // handbrake engaged
+        }
+        else if (bytes[5] == 0x30)
+        {
+            Param::SetInt(Param::handbrk, 0); // handbrake disengaged
+        }
+        else
+        {
+            Param::SetInt(Param::handbrk, 2);
+        }
+    }
+    if (id == 0x0CE)
+    {
+        uint8_t wheelspeeds[3];
+
+        wheelspeeds[0] = bytes[1] << 8 | bytes[0];
+        wheelspeeds[1] = bytes[3] << 8 | bytes[2];
+        wheelspeeds[2] = bytes[5] << 8 | bytes[4];
+        wheelspeeds[3] = bytes[7] << 8 | bytes[6];
+
+        Param::SetInt(Param::Tire1_Speed, wheelspeeds[0]);
+        Param::SetInt(Param::Tire2_Speed, wheelspeeds[1]);
+        Param::SetInt(Param::Tire3_Speed, wheelspeeds[2]);
+        Param::SetInt(Param::Tire4_Speed, wheelspeeds[3]);
+    }
+}
+
+void BMW_E90Class::BrakeStatus(int id, uint32_t data[2])
+{
+    uint8_t* bytes = (uint8_t*)data;// arrgghhh this converts the two 32bit array into bytes. See comments are useful:)
+
+    if (id == 0x19E)
+    {
+        if (bytes[1] == 0xE0) // DTC off / traction control fully enabled
+        {
+            Param::SetInt(Param::DTC, 0);
+        }
+        else if (bytes[1] == 0xF0) // DTC on
+        {
+            Param::SetInt(Param::DTC, 1);
+        }
+        else if (bytes[1] == 0xE4) // traction control fully disabled
+        {
+            Param::SetInt(Param::DTC, 2);
+        }
+
+        if (bytes[5] == 0x20)
+        {
+            Param::SetInt(Param::din_brake, 0); // Brake not pressed
+        }
+        else if (bytes[5] == 0x61)
+        {
+            Param::SetInt(Param::din_brake, 1); // Brake pressed
+        }
+        else 
+        {
+            Param::SetInt(Param::din_brake, 2); // unknown
+        }
+        
+        
+        Param::SetInt(Param::brakepressure, bytes[6]); // brakepressure in bar
+
+    }
+}
+
 /////////////////this can id must be sent once at T15 on to fire up the instrument cluster/////////////////////////
 void BMW_E90Class::DashOn()
 {
@@ -185,38 +259,37 @@ void BMW_E90Class::absdsc(bool Brake_In)
 {
 
 //////////send abs/dsc messages////////////////////////
+
+    /*      CAN-ID 0X0A8    */
     uint8_t a8_brake;
     uint8_t bytes[8];
 
     if(Brake_In)
     {
-        a8_brake=0x64;
+        a8_brake=0x64; // brake pressed
     }
-
     else
     {
-        a8_brake=0x04;
+        a8_brake=0x04; // brake pressed
     }
 
     int16_t check_A8 = (A81+0x21+0xe0+0x21+0x1f+0x0f+a8_brake+0xa8);
     check_A8 = (check_A8 / 0x100)+ (check_A8 & 0xff);
     check_A8 = check_A8 & 0xff;
 
-
-
     bytes[0]=check_A8;  //checksum
     bytes[1]=A81; //counter byte
     bytes[2]=0x21;
     bytes[3]=0xe0;
-    bytes[4]=0x21;
-    bytes[5]=0x1f;
-    bytes[6]=0x0f;
+    bytes[4]=0xfa; // key in start on
+    bytes[5]=0x1c; // clutch not pressed
+    bytes[6]=0xcf;
     bytes[7]=a8_brake;  //brake off =0x04 , brake on = 0x64.
 
     Can::GetInterface(1)->Send(0x0A8, (uint32_t*)bytes,8); //Send on CAN2
 
 
-
+    /*      CAN-ID 0X0A9    */
     bytes[0]=A90; //first counter byte
     bytes[1]=A91; //second counter byte
     bytes[2]=0x79;
@@ -228,6 +301,8 @@ void BMW_E90Class::absdsc(bool Brake_In)
 
     Can::GetInterface(1)->Send(0x0A9, (uint32_t*)bytes,8); //Send on CAN2
 
+
+    /*      CAN-ID 0X0BA    */
     int16_t check_BA = (gear_BA+0xff+0x0f+BA6+0x0ba);
     check_BA = (check_BA / 0x100)+ (check_BA & 0xff);
     check_BA = check_BA & 0xff;
@@ -241,7 +316,7 @@ void BMW_E90Class::absdsc(bool Brake_In)
     bytes[5]=check_BA; //BA5; //counter byte 5
     bytes[6]=BA6; //counter byte 6
 
-    Can::GetInterface(1)->Send(0x0BA, (uint32_t*)bytes,7); //Send on CAN2
+    //Can::GetInterface(1)->Send(0x0BA, (uint32_t*)bytes,7); //Send on CAN2
 
 
 
@@ -309,9 +384,4 @@ void BMW_E90Class::GDis()
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-void BMW_E90Class::getThrottle()
-{
-    
 }

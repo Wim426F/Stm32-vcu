@@ -60,7 +60,7 @@ static volatile unsigned
 
 // Instantiate Classes
 BMW_E65Class E65Vehicle;
-BMW_E90Class E90vehicle;
+BMW_E90Class E90Vehicle;
 GS450HClass gs450Inverter;
 chargerClass chgtype;
 uCAN_MSG txMessage;
@@ -397,13 +397,13 @@ static void Ms10Task(void)
         speed = GS450HClass::mg2_speed;//return MG2 rpm as speed param
     }
 
-       if(targetInverter == _invmodes::Prius_Gen3)
+    if(targetInverter == _invmodes::Prius_Gen3)
     {
         gs450Inverter.setTorqueTarget(torquePercent);//map throttle for GS450HClass inverter
         speed = GS450HClass::mg2_speed;//return MG2 rpm as speed param
     }
 
-            if(targetInverter == _invmodes::OpenI)
+    if(targetInverter == _invmodes::OpenI)
     {
         torquePercent = utils::change(torquePercent, 0, 3040, 0, 1000); //map throttle for OI
         Can_OI::SetThrottle(Param::Get(Param::dir),torquePercent);//send direction and torque request to inverter
@@ -436,8 +436,13 @@ static void Ms10Task(void)
         if(E65Vehicle.getTerminal15())
             BMW_E65Class::Tacho(Param::GetInt(Param::speed));//only send tach message if we are starting
     }
-
-       else if (targetVehicle == VAG)
+    else if (targetVehicle == _vehmodes::BMW_E90)
+    {
+        E90Vehicle.absdsc(Param::Get(Param::din_brake));
+        if(E90Vehicle.getTerminal15())
+            E90Vehicle.Tacho(Param::GetInt(Param::speed));//only send tach message if we are starting
+    }
+    else if (targetVehicle == VAG)
     {
         Can_VAG::SendVAG10msMessage(Param::GetInt(Param::speed));
     }
@@ -682,8 +687,11 @@ static void CanCallback(uint32_t id, uint32_t data[2]) //This is where we go whe
             E65Vehicle.Cas(id, data);
             // process BMW E90 CAN Gear Stalk messages
             E65Vehicle.Gear(id, data);
-            // process throttle
-            //E90Vehicle.getThrottle();
+            // process speed
+            E90Vehicle.Speed(id, data);
+            // process brake, abs and dsc status
+            E90Vehicle.BrakeStatus(id, data);
+
         } 
         if (targetInverter == _invmodes::OpenI)
         {
@@ -817,8 +825,8 @@ extern "C" int main(void)
     c2.SetReceiveCallback(CanCallback);
     c2.RegisterUserMessage(0x130);//E65 & E90 CAS
     c2.RegisterUserMessage(0x192);//E65 & E90 Shifter
-    c2.RegisterUserMessage(0x0AA);//E90 throttle
-    c2.RegisterUserMessage(0x34F);//E90 handbrake status
+    c2.RegisterUserMessage(0x0CE);//E90 wheel speeds
+    c2.RegisterUserMessage(0x1B4);//E90 speed & handbrake status
     c2.RegisterUserMessage(0x19E);//E90 abs/dsc & braking pressure
     c2.RegisterUserMessage(0x108);//Charger HV request
     c2.RegisterUserMessage(0x153);//E39/E46 ASC1 message

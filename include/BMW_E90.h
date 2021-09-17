@@ -20,11 +20,16 @@ public:
     void DashOn();
     void DashOff();
     void Gear(int id, uint32_t data[2]);
+    void Speed(int id, uint32_t data[2]);
+    void BrakeStatus(int id, uint32_t data[2]);
+
     uint8_t getGear();
     void setGear();
-    void getThrottle();
     bool getTerminal15();
     void setTerminal15(bool);
+
+    uint8_t handbrakeStat();
+
     BMW_E90Class()
     {
         Terminal15On = false;
