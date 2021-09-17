@@ -1,6 +1,12 @@
 #include "utils.h"
+#include "BMW_E90.h"
+
+
 
 namespace utils {
+
+BMW_E90Class E90vehicle;
+BMW_E65Class E65Vehicle;
 
 #define CAN_TIMEOUT       50  //500ms
 #define PRECHARGE_TIMEOUT 500 //5s
@@ -85,7 +91,7 @@ int GetUserThrottleCommand()
 }
 
 
-void SelectDirection(_vehmodes targetVehicle, BMW_E65Class E65Vehicle)
+void SelectDirection(_vehmodes targetVehicle)
 {
     int8_t selectedDir = Param::GetInt(Param::dir);
     int8_t userDirSelection = 0;
@@ -95,6 +101,24 @@ void SelectDirection(_vehmodes targetVehicle, BMW_E65Class E65Vehicle)
     {
         // if in an E65 we get direction from the shift stalk via CAN
         switch (E65Vehicle.getGear())
+        {
+        case 0:
+            selectedDir = 0; // Park
+            break;
+        case 1:
+            selectedDir = -1; // Reverse
+            break;
+        case 2:
+            selectedDir = 0; // Neutral
+            break;
+        case 3:
+            selectedDir = 1; // Drive
+            break;
+        }
+    }
+    else if (targetVehicle == _vehmodes::BMW_E90)
+    {
+        switch (E90vehicle.getGear())
         {
         case 0:
             selectedDir = 0; // Park

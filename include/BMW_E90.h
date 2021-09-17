@@ -1,7 +1,7 @@
-#ifndef BMW_E65_h
-#define BMW_E65_h
+#ifndef BMW_E90_h
+#define BMW_E90_h
 
-/*  This library supports the Powertrain CAN messages for the BMW E65 for driving dash gauges, putting out malf lights etc
+/*  This library supports the Powertrain CAN messages for the BMW E90 for driving dash gauges, putting out malf lights etc
     Also reads gear lever, brake lights etc
 
 */
@@ -9,22 +9,23 @@
 #include <stdint.h>
 #include "my_fp.h"
 
-class BMW_E65Class
+class BMW_E90Class
 {
 
 public:
     static		void Tacho(int16_t speed);
     static		void absdsc(bool Brake_In);
-    static		void GDis(); 
+    static		void GDis(); // geardisplay
     void Cas(int id, uint32_t data[2]);
     void DashOn();
     void DashOff();
     void Gear(int id, uint32_t data[2]);
     uint8_t getGear();
     void setGear();
+    void getThrottle();
     bool getTerminal15();
     void setTerminal15(bool);
-    BMW_E65Class()
+    BMW_E90Class()
     {
         Terminal15On = false;
         dashInit = false;
@@ -37,5 +38,5 @@ private:
     uint8_t gear;
 };
 
-#endif /* BMW_E65_h */
+#endif /* BMW_E90_h */
 

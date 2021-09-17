@@ -60,6 +60,7 @@ static volatile unsigned
 
 // Instantiate Classes
 BMW_E65Class E65Vehicle;
+BMW_E90Class E90vehicle;
 GS450HClass gs450Inverter;
 chargerClass chgtype;
 uCAN_MSG txMessage;
@@ -240,7 +241,7 @@ static void Ms100Task(void)
     Param::SetFlt(Param::cpuload, cpuLoad / 10);
     Param::SetInt(Param::lasterr, ErrorMessage::GetLastError());
     int opmode = Param::GetInt(Param::opmode);
-    utils::SelectDirection(targetVehicle, E65Vehicle);
+    utils::SelectDirection(targetVehicle);
     utils::ProcessUdc(oldTime, GetInt(Param::speed));
     utils::CalcSOC();
 
@@ -675,6 +676,15 @@ static void CanCallback(uint32_t id, uint32_t data[2]) //This is where we go whe
             // process BMW E65 CAN Gear Stalk messages
             E65Vehicle.Gear(id, data);
         }
+        if(targetVehicle == _vehmodes::BMW_E90)
+        {
+            // process BMW E90 CAS (Conditional Access System) return messages
+            E65Vehicle.Cas(id, data);
+            // process BMW E90 CAN Gear Stalk messages
+            E65Vehicle.Gear(id, data);
+            // process throttle
+            //E90Vehicle.getThrottle();
+        } 
         if (targetInverter == _invmodes::OpenI)
         {
             // process leaf inverter return messages
@@ -805,8 +815,11 @@ extern "C" int main(void)
 
     // Set up CAN 2 (Vehicle CAN) callback and messages to listen for.
     c2.SetReceiveCallback(CanCallback);
-    c2.RegisterUserMessage(0x130);//E65 CAS
-    c2.RegisterUserMessage(0x192);//E65 Shifter
+    c2.RegisterUserMessage(0x130);//E65 & E90 CAS
+    c2.RegisterUserMessage(0x192);//E65 & E90 Shifter
+    c2.RegisterUserMessage(0x0AA);//E90 throttle
+    c2.RegisterUserMessage(0x34F);//E90 handbrake status
+    c2.RegisterUserMessage(0x19E);//E90 abs/dsc & braking pressure
     c2.RegisterUserMessage(0x108);//Charger HV request
     c2.RegisterUserMessage(0x153);//E39/E46 ASC1 message
 

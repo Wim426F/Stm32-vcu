@@ -1,6 +1,8 @@
-#include <BMW_E65.h>
+#include <BMW_E90.h>
 #include "stm32_can.h"
+#include "params.h"
 
+BMW_E90Class E90Vehicle;
 
 #define PARK 0
 #define REVERSE 1
@@ -8,22 +10,21 @@
 #define DRIVE 3
 
 
-int32_t RPM;
-uint8_t  Gcount; //gear display counter byte
-uint8_t shiftPos=0xe1; //contains byte to display gear position on dash.default to park
-uint8_t gear_BA=0x03; //set to park as initial condition
-uint8_t mthCnt;
-uint8_t A80=0xbe;//0x0A8 first counter byte
-uint8_t A81=0x00;//0x0A8 second counter byte
-uint8_t A90=0xe9;//0x0A9 first counter byte
-uint8_t A91=0x00;//0x0A9 second counter byte
-uint8_t BA5=0x4d;//0x0BA first counter byte(byte 5)
-uint8_t BA6=0x80;//0x0BA second counter byte(byte 6)
+static int32_t RPM;
+static uint8_t  Gcount; //gear display counter byte
+static uint8_t shiftPos=0xe1; //contains byte to display gear position on dash.default to park
+static uint8_t gear_BA=0x03; //set to park as initial condition
+static uint8_t A80=0xbe;//0x0A8 first counter byte
+static uint8_t A81=0x00;//0x0A8 second counter byte
+static uint8_t A90=0xe9;//0x0A9 first counter byte
+static uint8_t A91=0x00;//0x0A9 second counter byte
+static uint8_t BA5=0x4d;//0x0BA first counter byte(byte 5)
+static uint8_t BA6=0x80;//0x0BA second counter byte(byte 6)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////Handle incomming pt can messages from the car here
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void BMW_E65Class::Cas(int id, uint32_t data[2])
+void BMW_E90Class::Cas(int id, uint32_t data[2])
 {
     // Initalize to a value. Unused unless the message ID matches.
     bool T15Status = false;
@@ -46,7 +47,7 @@ void BMW_E65Class::Cas(int id, uint32_t data[2])
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void BMW_E65Class::Gear(int id, uint32_t data[2])
+void BMW_E90Class::Gear(int id, uint32_t data[2])
 {
     //////////////////////Decode gear selector , update inverter and display back onto cluster in car.
     if(id==0x192)
@@ -104,7 +105,7 @@ void BMW_E65Class::Gear(int id, uint32_t data[2])
 }
 
 /////////////////this can id must be sent once at T15 on to fire up the instrument cluster/////////////////////////
-void BMW_E65Class::DashOn()
+void BMW_E90Class::DashOn()
 {
     uint8_t bytes[8];
 
@@ -123,7 +124,7 @@ void BMW_E65Class::DashOn()
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void BMW_E65Class::DashOff()
+void BMW_E90Class::DashOff()
 {
     this->dashInit=false;
 }
@@ -135,7 +136,7 @@ void BMW_E65Class::DashOff()
 /////////////Send frames every 10ms and send/rexeive inverter control serial data ///////////////////////////////////////
 
 //Send this frames every 10ms.
-void BMW_E65Class::Tacho(int16_t speed)
+void BMW_E90Class::Tacho(int16_t speed)
 {
     uint8_t bytes[8];
 //uint8_t bytes_RPM[4];
@@ -180,7 +181,7 @@ void BMW_E65Class::Tacho(int16_t speed)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void BMW_E65Class::absdsc(bool Brake_In)
+void BMW_E90Class::absdsc(bool Brake_In)
 {
 
 //////////send abs/dsc messages////////////////////////
@@ -267,25 +268,25 @@ void BMW_E65Class::absdsc(bool Brake_In)
 }
 
 // Class functions (getter / setter)
-bool BMW_E65Class::getTerminal15()
+bool BMW_E90Class::getTerminal15()
 {
     return Terminal15On;
 }
 
-void BMW_E65Class::setTerminal15(bool t15Status)
+void BMW_E90Class::setTerminal15(bool t15Status)
 {
     Terminal15On = t15Status;
 }
 
 
-uint8_t BMW_E65Class::getGear()
+uint8_t BMW_E90Class::getGear()
 {
     return gear;    //send the shifter pos
 }
 
 
 ////////////Send these frames every 200ms /////////////////////////////////////////
-void BMW_E65Class::GDis()
+void BMW_E90Class::GDis()
 {
     uint8_t bytes[8];
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -308,4 +309,9 @@ void BMW_E65Class::GDis()
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+void BMW_E90Class::getThrottle()
+{
+    
 }

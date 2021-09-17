@@ -24,6 +24,7 @@
 #include "Can_E39.h"
 #include "Can_E46.h"
 #include "BMW_E65.h"
+#include "BMW_E90.h"
 #include "Can_OI.h"
 #include "Can_VAG.h"
 #include "GS450H.h"
@@ -50,3 +51,4 @@ typedef union {
     } frame;
     uint8_t array[14];
 } CAN3_Msg;
+
