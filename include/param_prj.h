@@ -24,7 +24,7 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 50
+//Next param id (increase when adding new parameter!): 57
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_SETUP,Inverter,     INVMODES    ,  0,      5,      0,      5  ) \
@@ -64,10 +64,14 @@
     PARAM_ENTRY(CAT_CHARGER, interface,  CHGint,0,      3,      0,      39  ) \
     PARAM_ENTRY(CAT_CHARGER, Voltspnt,       "V",       0,      1000,   395,    40  ) \
     PARAM_ENTRY(CAT_CHARGER, Pwrspnt,       "W",       0,      12000,   1500,    41  ) \
+    PARAM_ENTRY(CAT_CHARGER, IdcTerm,       "A",       0,      150,   0,    56  ) \
     PARAM_ENTRY(CAT_CHARGER, CCS_ICmd,       "A",       0,      150,   0,    42  ) \
     PARAM_ENTRY(CAT_CHARGER, CCS_ILim,       "A",       0,      350,   100,    43  ) \
     PARAM_ENTRY(CAT_CHARGER, CCS_SOCLim,       "%",       0,      100,   80,    44  ) \
     PARAM_ENTRY(CAT_CHARGER, Chgctrl,  CHGCTRL,0,      2,      0,      45  ) \
+    PARAM_ENTRY(CAT_Heater,   Heater,       HtType,       0,      2,   0,    57  ) \
+    PARAM_ENTRY(CAT_Heater,   Control,       HtCtrl,       0,      2,   0,    58  ) \
+    PARAM_ENTRY(CAT_Heater,   HeatPwr,       "W",       0,      6500,   0,    59  ) \
     PARAM_ENTRY(CAT_CLOCK,   Set_Day,       Days,       0,      6,   0,    46  ) \
     PARAM_ENTRY(CAT_CLOCK,   Set_Hour,      "Hours",       0,      23,   0,    47  ) \
     PARAM_ENTRY(CAT_CLOCK,   Set_Min,      "Mins",       0,      59,   0,    48  ) \
@@ -133,6 +137,7 @@
     VALUE_ENTRY(CCS_I_Avail,     "A",   2052 ) \
     VALUE_ENTRY(CCS_V_Avail,     "V",   2053 ) \
     VALUE_ENTRY(CCS_I,     "A",   2054 ) \
+    VALUE_ENTRY(CCS_Ireq,     "A",   2068 ) \
     VALUE_ENTRY(CCS_V,     "V",   2055 ) \
     VALUE_ENTRY(CCS_V_Min, "V",   2056 ) \
     VALUE_ENTRY(CCS_V_Con, "V",   2057 ) \
@@ -141,18 +146,19 @@
     VALUE_ENTRY(CCS_State,      "s",  2060 ) \
     VALUE_ENTRY(CP_DOOR,   dmodes,   2061 ) \
     VALUE_ENTRY(CCS_Contactor,   ONOFF,   2062 ) \
-    VALUE_ENTRY(cpuload,      "%",     2063 ) \
     VALUE_ENTRY(Day,          Dow,   2064 ) \
     VALUE_ENTRY(Hour,          "H",   2065 ) \
     VALUE_ENTRY(Min,          "M",   2066 ) \
     VALUE_ENTRY(Sec,          "S",   2067 ) \
-    VALUE_ENTRY(Tire1_Speed,     "kph",   2068 ) \
-    VALUE_ENTRY(Tire2_Speed,     "kph",   2069 ) \
-    VALUE_ENTRY(Tire3_Speed,     "kph",   2070 ) \
-    VALUE_ENTRY(Tire4_Speed,     "kph",   2071 ) \
-    VALUE_ENTRY(DTC,    ONOFF,   2072 ) \
+    VALUE_ENTRY(ChgT,          "M",   2068 ) \
+    VALUE_ENTRY(cpuload,      "%",     2063 ) \
+    VALUE_ENTRY(Tire1_Speed,     "kph",   2069 ) \
+    VALUE_ENTRY(Tire2_Speed,     "kph",   2070 ) \
+    VALUE_ENTRY(Tire3_Speed,     "kph",   2071 ) \
+    VALUE_ENTRY(Tire4_Speed,     "kph",   2072 ) \
+    VALUE_ENTRY(DTC,    ONOFF,   2073 ) \
 
-//Next value Id: 2072
+//Next value Id: 2074
 
 #define VERSTR STRINGIFY(4=VER)
 #define dmodes     "0=CLOSED, 1=OPEN, 2=ERROR, 3=INVALID"
@@ -180,6 +186,8 @@
 #define ERRLIGHTS    "0=Off, 4=EPC, 8=engine"
 #define CRUISESTATES "0=None, 1=On, 2=Disable, 4=SetN, 8=SetP"
 #define CDMSTAT      "1=Charging, 2=Malfunction, 4=ConnLock, 8=BatIncomp, 16=SystemMalfunction, 32=Stop"
+#define HtType      "0=None, 1=Ampera, 2=VW"
+#define HtCtrl      "0=Disable, 1=Enable, 2=Timer"
 #define CAT_THROTTLE "Throttle"
 #define CAT_POWER    "Power Limit"
 #define CAT_CONTACT  "Contactor Control"
@@ -187,6 +195,7 @@
 #define CAT_COMM     "Communication"
 #define CAT_SETUP      "Vehicle Module"
 #define CAT_CLOCK      "RTC Module"
+#define CAT_Heater      "Heater Module"
 #define CAT_CRUISE   "Cruise Control"
 #define CAT_LEXUS   "Gearbox Control"
 #define CAT_CHARGER  "Charger Control"

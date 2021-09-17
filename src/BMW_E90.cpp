@@ -103,79 +103,77 @@ void BMW_E90Class::Gear(int id, uint32_t data[2])
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void BMW_E90Class::Speed(int id, uint32_t data[2])
+void BMW_E90Class::handle0CE(uint32_t data[2]) // individual wheel speeds
 {
     uint8_t* bytes = (uint8_t*)data;// arrgghhh this converts the two 32bit array into bytes. See comments are useful:)
-    if (id == 0x1B4)
-    {
-        //uint16_t road_speed=((bytes[1]<<8)|(bytes[0]))-0x160;
-        uint16_t road_speed = (((bytes[1] - 192) * 256) + bytes[0] ) / 16; // speed in kmh
-        Param::SetInt(Param::Veh_Speed,road_speed);
-        if (bytes[5] == 0x32)
-        {
-            Param::SetInt(Param::handbrk, 1); // handbrake engaged
-        }
-        else if (bytes[5] == 0x30)
-        {
-            Param::SetInt(Param::handbrk, 0); // handbrake disengaged
-        }
-        else
-        {
-            Param::SetInt(Param::handbrk, 2);
-        }
-    }
-    if (id == 0x0CE)
-    {
-        uint8_t wheelspeeds[3];
+    uint8_t wheelspeeds[3];
 
-        wheelspeeds[0] = bytes[1] << 8 | bytes[0];
-        wheelspeeds[1] = bytes[3] << 8 | bytes[2];
-        wheelspeeds[2] = bytes[5] << 8 | bytes[4];
-        wheelspeeds[3] = bytes[7] << 8 | bytes[6];
+    wheelspeeds[0] = bytes[1] << 8 | bytes[0];
+    wheelspeeds[1] = bytes[3] << 8 | bytes[2];
+    wheelspeeds[2] = bytes[5] << 8 | bytes[4];
+    wheelspeeds[3] = bytes[7] << 8 | bytes[6];
 
-        Param::SetInt(Param::Tire1_Speed, wheelspeeds[0]);
-        Param::SetInt(Param::Tire2_Speed, wheelspeeds[1]);
-        Param::SetInt(Param::Tire3_Speed, wheelspeeds[2]);
-        Param::SetInt(Param::Tire4_Speed, wheelspeeds[3]);
-    }
+    Param::SetInt(Param::Tire1_Speed, wheelspeeds[0]);
+    Param::SetInt(Param::Tire2_Speed, wheelspeeds[1]);
+    Param::SetInt(Param::Tire3_Speed, wheelspeeds[2]);
+    Param::SetInt(Param::Tire4_Speed, wheelspeeds[3]);
 }
 
-void BMW_E90Class::BrakeStatus(int id, uint32_t data[2])
+void BMW_E90Class::handle1B4(uint32_t data[2]) // vehicle speed
 {
     uint8_t* bytes = (uint8_t*)data;// arrgghhh this converts the two 32bit array into bytes. See comments are useful:)
 
-    if (id == 0x19E)
+    //uint16_t road_speed=((bytes[1]<<8)|(bytes[0]))-0x160;
+    uint16_t road_speed = (((bytes[1] - 192) * 256) + bytes[0] ) / 16; // speed in kmh
+    Param::SetInt(Param::Veh_Speed,road_speed);
+    if (bytes[5] == 0x32)
     {
-        if (bytes[1] == 0xE0) // DTC off / traction control fully enabled
-        {
-            Param::SetInt(Param::DTC, 0);
-        }
-        else if (bytes[1] == 0xF0) // DTC on
-        {
-            Param::SetInt(Param::DTC, 1);
-        }
-        else if (bytes[1] == 0xE4) // traction control fully disabled
-        {
-            Param::SetInt(Param::DTC, 2);
-        }
-
-        if (bytes[5] == 0x20)
-        {
-            Param::SetInt(Param::din_brake, 0); // Brake not pressed
-        }
-        else if (bytes[5] == 0x61)
-        {
-            Param::SetInt(Param::din_brake, 1); // Brake pressed
-        }
-        else 
-        {
-            Param::SetInt(Param::din_brake, 2); // unknown
-        }
-        
-        
-        Param::SetInt(Param::brakepressure, bytes[6]); // brakepressure in bar
-
+        Param::SetInt(Param::handbrk, 1); // handbrake engaged
     }
+    else if (bytes[5] == 0x30)
+    {
+        Param::SetInt(Param::handbrk, 0); // handbrake disengaged
+    }
+    else
+    {
+        Param::SetInt(Param::handbrk, 2);
+    }
+    
+}
+
+void BMW_E90Class::handle19E(uint32_t data[2]) // ABS/DSC & Brakes
+{
+    uint8_t* bytes = (uint8_t*)data;// arrgghhh this converts the two 32bit array into bytes. See comments are useful:)
+
+    if (bytes[1] == 0xE0) // DTC off / traction control fully enabled
+    {
+        Param::SetInt(Param::DTC, 0);
+    }
+    else if (bytes[1] == 0xF0) // DTC on
+    {
+        Param::SetInt(Param::DTC, 1);
+    }
+    else if (bytes[1] == 0xE4) // traction control fully disabled
+    {
+        Param::SetInt(Param::DTC, 2);
+    }
+
+    if (bytes[5] == 0x20)
+    {
+        Param::SetInt(Param::din_brake, 0); // Brake not pressed
+    }
+    else if (bytes[5] == 0x61)
+    {
+        Param::SetInt(Param::din_brake, 1); // Brake pressed
+    }
+    else 
+    {
+        Param::SetInt(Param::din_brake, 2); // unknown
+    }
+    
+    
+    Param::SetInt(Param::brakepressure, bytes[6]); // brakepressure in bar
+
 }
 
 /////////////////this can id must be sent once at T15 on to fire up the instrument cluster/////////////////////////

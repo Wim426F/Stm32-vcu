@@ -20,15 +20,15 @@ public:
     void DashOn();
     void DashOff();
     void Gear(int id, uint32_t data[2]);
-    void Speed(int id, uint32_t data[2]);
-    void BrakeStatus(int id, uint32_t data[2]);
+
+    void handle19E(uint32_t data[2]); // ABS/DSC & Brakes
+    void handle0CE(uint32_t data[2]); // individual wheel speeds
+    void handle1B4(uint32_t data[2]); // vehicle speed
 
     uint8_t getGear();
     void setGear();
     bool getTerminal15();
     void setTerminal15(bool);
-
-    uint8_t handbrakeStat();
 
     BMW_E90Class()
     {
