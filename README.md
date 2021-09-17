@@ -16,6 +16,7 @@ Video on progress : https://vimeo.com/506480876
 - BMW E46 CAN support
 - BMW E39 CAN support
 - BMW E65 CAN Support
+- BMW E90 CAN Support
 - Mid 2000s VAG Can support
 
 # Compiling

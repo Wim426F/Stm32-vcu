@@ -60,7 +60,7 @@ static volatile unsigned
 
 // Instantiate Classes
 BMW_E65Class E65Vehicle;
-BMW_E90Class E90vehicle;
+BMW_E90Class E90Vehicle;
 GS450HClass gs450Inverter;
 chargerClass chgtype;
 uCAN_MSG txMessage;
@@ -187,15 +187,15 @@ static void Ms200Task(void)
 
     if(targetCharger == _chgmodes::EXT_CAN)
     {
-
-
     }
 
     if(targetCharger == _chgmodes::EXT_DIGI)
     {
-   if((opmode != MOD_RUN) && (RunChg))  chargeMode = DigIo::HV_req.Get();//false; //this mode accepts a request for HV via a 12v inputfrom a charger controller e.g. Tesla Gen2/3 M3 PCS etc.
-    if(!RunChg) chargeMode = false;                                                                //response with a 12v output signal on a digital output.
+        if((opmode != MOD_RUN) && (RunChg))  
+            chargeMode = DigIo::HV_req.Get();   //this mode accepts a request for HV via a 12v inputfrom a charger controller e.g. Tesla Gen2/3 M3 PCS etc.
 
+        if(!RunChg) 
+            chargeMode = false; //response with a 12v output signal on a digital output.
     }
 
     ///////////////////////////////////////
@@ -209,27 +209,27 @@ static void Ms200Task(void)
     ///////////////////////////////////////
 
 
-
-        if(opmode==MOD_CHARGE) DigIo::gp_out3.Set();//Chademo relay on for testing
-        if(opmode!=MOD_CHARGE) DigIo::gp_out3.Clear();//Chademo relay off for testing
+    if(opmode==MOD_CHARGE) 
+        DigIo::gp_out3.Set();//Chademo relay on for testing
+    
+    if(opmode!=MOD_CHARGE) 
+        DigIo::gp_out3.Clear();//Chademo relay off for testing
 
     count_one++;
-if(count_one==1)    //just a dummy routine that sweeps the pots for testing.
-{
-    pot_test++;
-    DigIo::pot1_cs.Clear();
-    DigIo::pot2_cs.Clear();
-    uint8_t dummy=spi_xfer(SPI3,pot_test);//test
-    dummy=dummy;
-    DigIo::pot1_cs.Set();
-    DigIo::pot2_cs.Set();
-    count_one=0;
-}
+
+    if(count_one==1)    //just a dummy routine that sweeps the pots for testing.
+    {
+        pot_test++;
+        DigIo::pot1_cs.Clear();
+        DigIo::pot2_cs.Clear();
+        uint8_t dummy=spi_xfer(SPI3,pot_test);//test
+        dummy=dummy;
+        DigIo::pot1_cs.Set();
+        DigIo::pot2_cs.Set();
+        count_one=0;
+    }
 
 }
-
-
-
 
 
 
@@ -246,21 +246,20 @@ static void Ms100Task(void)
     utils::CalcSOC();
 
 
-        if(targetInverter == _invmodes::OpenI)
+    if(targetInverter == _invmodes::OpenI)
     {
       if (opmode == MOD_RUN) Can_OI::Send100msMessages();
-
     }
 
     if(targetChgint == _interface::Leaf_PDM) //Leaf Gen2 PDM charger/DCDC/Chademo
     {
         if (opmode == MOD_CHARGE)
-            {
-               LeafINV::Send100msMessages();//send leaf 100ms msgs if we are using the pdm and in charge mode
-            }
+        {
+            LeafINV::Send100msMessages();//send leaf 100ms msgs if we are using the pdm and in charge mode
+        }
     }
 
-        if(targetChgint == _interface::i3LIM) //BMW i3 LIM
+    if(targetChgint == _interface::i3LIM) //BMW i3 LIM
     {
         i3LIMClass::Send100msMessages();
     }
@@ -271,8 +270,7 @@ static void Ms100Task(void)
         gs450Inverter.run100msTask(Lexus_Gear, Lexus_Oil);
         Param::SetInt(Param::INVudc,gs450Inverter.dc_bus_voltage);//display inverter derived dc link voltage on web interface
     }
-
-  else if (targetInverter == _invmodes::GS450H)
+    else if (targetInverter == _invmodes::GS450H)
     {
         gs450Inverter.SetGS450H();//select gs450h inverter mode
         gs450Inverter.run100msTask(Lexus_Gear, Lexus_Oil);
@@ -294,7 +292,7 @@ static void Ms100Task(void)
         Param::SetInt(Param::INVudc,(LeafINV::voltage/2));//display inverter derived dc link voltage on web interface
     }
 
-        if (targetInverter == _invmodes::OpenI)
+    if (targetInverter == _invmodes::OpenI)
     {
         Param::SetInt(Param::tmphs,Can_OI::inv_temp);//send leaf temps to web interface
         Param::SetInt(Param::tmpm,Can_OI::motor_temp);
@@ -324,7 +322,8 @@ static void Ms100Task(void)
       Param::SetInt(Param::T15Stat,DigIo::t15_digi.Get());
     }
 
-    if(targetVehicle==VAG) Can_VAG::SendVAG100msMessage();
+    if(targetVehicle==VAG) 
+        Can_VAG::SendVAG100msMessage();
 
 
     if (!chargeMode && rtc_get_counter_val() > 100)
@@ -350,15 +349,15 @@ static void Ms10Task(void)
     ErrorMessage::SetTime(rtc_get_counter_val());
 
 
-        if(targetChgint == _interface::Leaf_PDM) //Leaf Gen2 PDM charger/DCDC/Chademo
-            {
+    if(targetChgint == _interface::Leaf_PDM) //Leaf Gen2 PDM charger/DCDC/Chademo
+    {
 
-            if (opmode == MOD_CHARGE)
-                {
-               LeafINV::Send10msMessages();//send leaf 10ms msgs if we are using the pdm and in charge mode
-                }
+        if (opmode == MOD_CHARGE)
+        {
+            LeafINV::Send10msMessages();//send leaf 10ms msgs if we are using the pdm and in charge mode
+        }
 
-            }
+    }
 
     if(targetChgint == _interface::i3LIM) //BMW i3 LIM
     {
@@ -380,16 +379,16 @@ static void Ms10Task(void)
     if (opmode != MOD_OFF)  //send leaf messages only when not in off mode.
     {
 
-    if(targetInverter == _invmodes::Leaf_Gen1)
-    {
-        LeafINV::Send10msMessages();//send leaf messages on can1 if we select leaf
-        speed = ABS(LeafINV::speed/2);//set motor rpm on interface
-        torquePercent = utils::change(torquePercent, 0, 3040, 0, 2047); //map throttle for Leaf inverter
-        LeafINV::SetTorque(Param::Get(Param::dir),torquePercent);//send direction and torque request to inverter
+        if(targetInverter == _invmodes::Leaf_Gen1)
+        {
+            LeafINV::Send10msMessages();//send leaf messages on can1 if we select leaf
+            speed = ABS(LeafINV::speed/2);//set motor rpm on interface
+            torquePercent = utils::change(torquePercent, 0, 3040, 0, 2047); //map throttle for Leaf inverter
+            LeafINV::SetTorque(Param::Get(Param::dir),torquePercent);//send direction and torque request to inverter
+
+        }
 
     }
-
-     }
 
     if(targetInverter == _invmodes::GS450H)
     {
@@ -397,13 +396,13 @@ static void Ms10Task(void)
         speed = GS450HClass::mg2_speed;//return MG2 rpm as speed param
     }
 
-       if(targetInverter == _invmodes::Prius_Gen3)
+    if(targetInverter == _invmodes::Prius_Gen3)
     {
         gs450Inverter.setTorqueTarget(torquePercent);//map throttle for GS450HClass inverter
         speed = GS450HClass::mg2_speed;//return MG2 rpm as speed param
     }
 
-            if(targetInverter == _invmodes::OpenI)
+    if(targetInverter == _invmodes::OpenI)
     {
         torquePercent = utils::change(torquePercent, 0, 3040, 0, 1000); //map throttle for OI
         Can_OI::SetThrottle(Param::Get(Param::dir),torquePercent);//send direction and torque request to inverter
@@ -436,8 +435,13 @@ static void Ms10Task(void)
         if(E65Vehicle.getTerminal15())
             BMW_E65Class::Tacho(Param::GetInt(Param::speed));//only send tach message if we are starting
     }
-
-       else if (targetVehicle == VAG)
+    else if (targetVehicle == _vehmodes::BMW_E90)
+    {
+        E90Vehicle.absdsc(Param::Get(Param::din_brake));
+        if(E90Vehicle.getTerminal15())
+            E90Vehicle.Tacho(Param::GetInt(Param::speed));//only send tach message if we are starting
+    }
+    else if (targetVehicle == VAG)
     {
         Can_VAG::SendVAG10msMessage(Param::GetInt(Param::speed));
     }
@@ -679,11 +683,14 @@ static void CanCallback(uint32_t id, uint32_t data[2]) //This is where we go whe
         if(targetVehicle == _vehmodes::BMW_E90)
         {
             // process BMW E90 CAS (Conditional Access System) return messages
-            E65Vehicle.Cas(id, data);
+            E90Vehicle.Cas(id, data);
             // process BMW E90 CAN Gear Stalk messages
-            E65Vehicle.Gear(id, data);
-            // process throttle
-            //E90Vehicle.getThrottle();
+            E90Vehicle.Gear(id, data);
+            // process speed
+            E90Vehicle.Speed(id, data);
+            // process brake, abs and dsc status
+            E90Vehicle.BrakeStatus(id, data);
+
         } 
         if (targetInverter == _invmodes::OpenI)
         {
@@ -817,8 +824,8 @@ extern "C" int main(void)
     c2.SetReceiveCallback(CanCallback);
     c2.RegisterUserMessage(0x130);//E65 & E90 CAS
     c2.RegisterUserMessage(0x192);//E65 & E90 Shifter
-    c2.RegisterUserMessage(0x0AA);//E90 throttle
-    c2.RegisterUserMessage(0x34F);//E90 handbrake status
+    c2.RegisterUserMessage(0x0CE);//E90 wheel speeds
+    c2.RegisterUserMessage(0x1B4);//E90 speed & handbrake status
     c2.RegisterUserMessage(0x19E);//E90 abs/dsc & braking pressure
     c2.RegisterUserMessage(0x108);//Charger HV request
     c2.RegisterUserMessage(0x153);//E39/E46 ASC1 message
