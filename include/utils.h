@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include "BMW_E65.h"
+#include "BMW_E90.h"
 #include "my_fp.h"
 #include "my_math.h"
 #include "errormessage.h"
