@@ -17,14 +17,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef DAISYCHAINBMS_H
-#define DAISYCHAINBMS_H
+#ifndef DILITHIUMMCU_H
+#define DILITHIUMMCU_H
 
 #include "bms.h"
 #include "canhardware.h"
 #include <stdint.h>
 
-class DaisychainBMS: public BMS
+class DilithiumMCU: public BMS
 {
    public:
       void SetCanInterface(CanHardware* c) override;
@@ -34,15 +34,11 @@ class DaisychainBMS: public BMS
    private:
       bool BMSDataValid();
       bool ChargeAllowed();
-      float temperature(uint16_t adc);
-      int timeoutCounter[2];
-      uint16_t minCell[2] = {0, 0};
-      uint16_t maxCell[2] = {0, 0};
-      uint16_t minTemp[2] = {0, 0};
-      uint16_t maxTemp[2] = {0, 0};
+      int chargeCurrentLimit = 0;  // Sent by Simp as 0.1A per digit and stored the same way.
+      int timeoutCounter = 0;
       float minCellV = 0;
       float maxCellV = 0;
       float minTempC = 0;
       float maxTempC = 0;
 };
-#endif // DAISYCHAINBMS_H
+#endif // DILITHIUMMCU_H

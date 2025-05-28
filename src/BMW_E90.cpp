@@ -19,27 +19,27 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <BMW_E65.h>
+#include <BMW_E90.h>
 #include "stm32_can.h"
 #include "params.h"
 #include "utils.h"
 
-uint8_t  Gcount; //gear display counter byte
-uint8_t shiftPos=0xe1; //contains byte to display gear position on dash.default to park
-uint8_t gear_BA=0x03; //set to park as initial condition
-uint8_t mthCnt;
-uint8_t C1D00 = 0x00;  //0x1D0 counter
-uint8_t C1D01 = 0x00;  //0x1D0 counter
-uint8_t A80=0xbe;//0x0A8 first counter byte
-uint8_t A81=0x00;//0x0A8 second counter byte
-uint8_t A90=0xe9;//0x0A9 first counter byte
-uint8_t A91=0x00;//0x0A9 second counter byte
-uint8_t BA5=0x4d;//0x0BA first counter byte(byte 5)
-uint8_t BA6=0x80;//0x0BA second counter byte(byte 6)
-uint8_t AA1=0x00;//0x0AA First counter byte
-uint8_t engineLights = 0;
+static uint8_t  Gcount; //gear display counter byte
+static uint8_t shiftPos=0xe1; //contains byte to display gear position on dash.default to park
+static uint8_t gear_BA=0x03; //set to park as initial condition
+static uint8_t mthCnt;
+static uint8_t C1D00 = 0x00;  //0x1D0 counter
+static uint8_t C1D01 = 0x00;  //0x1D0 counter
+static uint8_t A80=0xbe;//0x0A8 first counter byte
+static uint8_t A81=0x00;//0x0A8 second counter byte
+static uint8_t A90=0xe9;//0x0A9 first counter byte
+static uint8_t A91=0x00;//0x0A9 second counter byte
+static uint8_t BA5=0x4d;//0x0BA first counter byte(byte 5)
+static uint8_t BA6=0x80;//0x0BA second counter byte(byte 6)
+static uint8_t AA1=0x00;//0x0AA First counter byte
+static uint8_t engineLights = 0;
 
-void BMW_E65::SetCanInterface(CanHardware* c)
+void BMW_E90::SetCanInterface(CanHardware* c)
 {
     can = c;
 
@@ -51,25 +51,25 @@ void BMW_E65::SetCanInterface(CanHardware* c)
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////Handle incomming pt can messages from the car here
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void BMW_E65::DecodeCAN(int id, uint32_t* data)
+void BMW_E90::DecodeCAN(int id, uint32_t* data)
 {
 
     switch (id)
     {
     case 0x130:
-        BMW_E65::handle130(data);
+        BMW_E90::handle130(data);
         break;
 
     case 0x1A0:
-        BMW_E65::handle1A0(data);
+        BMW_E90::handle1A0(data);
         break;
 
     case 0x2FC:
-        BMW_E65::handle2FC(data);
+        BMW_E90::handle2FC(data);
         break;
 
     case 0x480:
-        BMW_E65::handle480(data);
+        BMW_E90::handle480(data);
         break;
 
     default:
@@ -77,7 +77,7 @@ void BMW_E65::DecodeCAN(int id, uint32_t* data)
     }
 }
 
-void BMW_E65::handle130(uint32_t data[2])
+void BMW_E90::handle130(uint32_t data[2])
 {
     uint8_t* bytes = (uint8_t*)data;
     /*
@@ -128,7 +128,7 @@ void BMW_E65::handle130(uint32_t data[2])
     }
 }
 
-void BMW_E65::handle1A0(uint32_t data[2])
+void BMW_E90::handle1A0(uint32_t data[2])
 {
     uint8_t* bytes = (uint8_t*)data;
 
@@ -136,7 +136,7 @@ void BMW_E65::handle1A0(uint32_t data[2])
     Param::SetFloat(Param::Veh_Speed, kph * 0.621371f);
 }
 
-void BMW_E65::handle2FC(uint32_t data[2])
+void BMW_E90::handle2FC(uint32_t data[2])
 {
     uint8_t* bytes = (uint8_t*)data;
     if (bytes[0] == 0x84)//Locked
@@ -149,7 +149,7 @@ void BMW_E65::handle2FC(uint32_t data[2])
     }
 }
 
-void BMW_E65::handle480(uint32_t data[2])
+void BMW_E90::handle480(uint32_t data[2])
 {
     uint8_t* bytes = (uint8_t*)data;
 
@@ -163,7 +163,7 @@ void BMW_E65::handle480(uint32_t data[2])
     }
 }
 
-void BMW_E65::Task10Ms()
+void BMW_E90::Task10Ms()
 {
     if(CANWake)
     {
@@ -171,7 +171,7 @@ void BMW_E65::Task10Ms()
     }
 }
 
-void BMW_E65::Task100Ms()
+void BMW_E90::Task100Ms()
 {
     if(CANWake)
     {
@@ -189,11 +189,11 @@ void BMW_E65::Task100Ms()
             this->dashInit=true;
         }
 
-        BMW_E65::Engine_Data();
+        BMW_E90::Engine_Data();
     }
 }
 
-void BMW_E65::Task200Ms()
+void BMW_E90::Task200Ms()
 {
     uint8_t bytes[8];
 
@@ -271,12 +271,12 @@ void BMW_E65::Task200Ms()
     }
 }
 
-void BMW_E65::DashOff()
+void BMW_E90::DashOff()
 {
     this->dashInit=false;
 }
 
-void BMW_E65::SendAbsDscMessages(bool Brake_In)
+void BMW_E90::SendAbsDscMessages(bool Brake_In)
 {
 
 //////////send abs/dsc messages////////////////////////
@@ -389,7 +389,7 @@ void BMW_E65::SendAbsDscMessages(bool Brake_In)
 
 }
 
-void BMW_E65::Engine_Data()
+void BMW_E90::Engine_Data()
 {
     uint8_t bytes[8];
 
@@ -442,7 +442,7 @@ void BMW_E65::Engine_Data()
 
 }
 
-void BMW_E65::SetFuelGauge(float level)
+void BMW_E90::SetFuelGauge(float level)
 {
     int pot1 = 0;
     int pot2 = 0;

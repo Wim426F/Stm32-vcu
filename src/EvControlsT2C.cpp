@@ -18,17 +18,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "rearoutlanderinverter.h"
+#include "EvControlsT2C.h"
 #include "my_math.h"
 #include "params.h"
 #include "OutlanderHeartBeat.h"
 
-RearOutlanderInverter::RearOutlanderInverter()
+EvControlsT2C::EvControlsT2C()
 {
     //ctor
 }
 
-void RearOutlanderInverter::SetCanInterface(CanHardware* c)
+void EvControlsT2C::SetCanInterface(CanHardware* c)
 {
     OutlanderHeartBeat::SetCanInterface(c);//set Outlander Heartbeat on same CAN
 
@@ -39,7 +39,7 @@ void RearOutlanderInverter::SetCanInterface(CanHardware* c)
     can->RegisterUserMessage(0x733);//Outlander Inv Msg
 }
 
-void RearOutlanderInverter::DecodeCAN(int id, uint32_t data[2])
+void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
 {
     uint8_t* bytes = (uint8_t*)data;// arrgghhh this converts the two 32bit array into bytes. See comments are useful:)
     switch (id)
@@ -62,7 +62,7 @@ void RearOutlanderInverter::DecodeCAN(int id, uint32_t data[2])
     }
 }
 
-void RearOutlanderInverter::SetTorque(float torquePercent)
+void EvControlsT2C::SetTorque(float torquePercent)
 {
 
     if(Param::GetInt(Param::reversemotor) == 0)
@@ -78,7 +78,7 @@ void RearOutlanderInverter::SetTorque(float torquePercent)
     Param::SetInt(Param::torque,final_torque_request);//post processed final torque value sent to inv to web interface
 }
 
-void RearOutlanderInverter::Task10Ms()
+void EvControlsT2C::Task10Ms()
 {
     run10ms++;
 
@@ -96,7 +96,7 @@ void RearOutlanderInverter::Task10Ms()
     }
 }
 
-void RearOutlanderInverter::Task100Ms()
+void EvControlsT2C::Task100Ms()
 {
     int opmode = Param::GetInt(Param::opmode);
     if(opmode==MOD_RUN)

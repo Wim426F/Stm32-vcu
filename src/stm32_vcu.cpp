@@ -47,6 +47,7 @@
 #include "isa_shunt.h"
 #include "BMW_E39.h"
 #include "BMW_E65.h"
+#include "BMW_E90.h"
 #include "subaruvehicle.h"
 #include "Can_OI.h"
 #include "outlanderinverter.h"
@@ -103,6 +104,8 @@
 #include "kangoobms.h"
 #include "OutlanderCanHeater.h"
 #include "OutlanderHeartBeat.h"
+#include "EvControlsT2C.h"
+#include "DilithiumMCU.h"
 
 #define PRECHARGE_TIMEOUT 5  //5s
 
@@ -144,6 +147,7 @@ static uint16_t rlyDly=25;
 // Instantiate Classes
 static BMW_E31 e31Vehicle;
 static BMW_E65 e65Vehicle;
+static BMW_E90 e90Vehicle;
 static BMW_E39 e39Vehicle;
 static Can_VAG vagVehicle;
 static SubaruVehicle subaruVehicle;
@@ -193,6 +197,7 @@ static DCDC* selectedDCDC = &DCDCnone;
 static Can_OBD2 canOBD2;
 static Shifter shifterNone;
 static RearOutlanderInverter rearoutlanderInv;
+static EvControlsT2C evControlsT2C;
 static LinBus* lin;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -767,6 +772,9 @@ static void UpdateInv()
         selectedInverter = &rearoutlanderInv;
         OutlanderCAN = true;
         break;
+    case InvModes::T2C:
+        selectedInverter = &evControlsT2C;
+        break;
     }
     //This will call SetCanFilters() via the Clear Callback
     canInterface[0]->ClearUserMessages();
@@ -799,6 +807,9 @@ static void UpdateVehicle()
         break;
     case vehicles::vBMW_E31:
         selectedVehicle = &e31Vehicle;
+        break;
+    case vehicles::vBMW_E90:
+        selectedVehicle = &e90Vehicle;
         break;
     case vehicles::Classic:
         selectedVehicle = &classVehicle;
@@ -911,6 +922,9 @@ static void UpdateBMS()
         selectedBMS = &BMSdaisychain;
         break;
     case BMSModes::BMSRenaultKangoo33BMS:
+        selectedBMS = &BMSRenaultKangoo33;
+        break;
+    case BMSModes::BMSDilithiumMCU:
         selectedBMS = &BMSRenaultKangoo33;
         break;
     default:

@@ -19,10 +19,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef BMW_E65_h
-#define BMW_E65_h
+#ifndef BMW_E90_h
+#define BMW_E90_h
 
-/*  This library supports the Powertrain CAN messages for the BMW E65 for driving dash gauges, putting out malf lights etc
+/*  This library supports the Powertrain CAN messages for the BMW E90 for driving dash gauges, putting out malf lights etc
     Also reads gear lever, brake lights etc
 
 */
@@ -31,10 +31,10 @@
 #include "vehicle.h"
 #include "my_math.h"
 
-class BMW_E65: public Vehicle
+class BMW_E90: public Vehicle
 {
 public:
-   BMW_E65() : terminal15On(false), dashInit(false), gear(PARK) { }
+   BMW_E90() : terminal15On(false), dashInit(false), gear(PARK) { }
    void SetCanInterface(CanHardware*);
    void Task10Ms();
    void Task100Ms();
@@ -68,5 +68,5 @@ private:
    bool isE90;
 };
 
-#endif /* BMW_E65_h */
+#endif /* BMW_E90_h */
 

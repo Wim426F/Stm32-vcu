@@ -17,10 +17,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "simpbms.h"
+#include "DilithiumMCU.h"
 
 /*
- * This module receives messages from SimpBMS and updates the
+ * This module receives messages from DilithiumMCU and updates the
  * BMS_MinV, BMS_MaxV, BMS_MinT and BMS_MaxT parameters with the
  * received values. It also implements a timeout to indicate whether
  * the BMS is actively sending data or not. This data can be
@@ -28,21 +28,21 @@
  * working correctly.
  */
 
-void SimpBMS::SetCanInterface(CanHardware* c)
+void DilithiumMCU::SetCanInterface(CanHardware* c)
 {
    can = c;
    can->RegisterUserMessage(0x373);
    can->RegisterUserMessage(0x351);
 }
 
-bool SimpBMS::BMSDataValid() {
+bool DilithiumMCU::BMSDataValid() {
    // Return false if primary BMS is not sending data.
    if(timeoutCounter < 1) return false;
    return true;
 }
 
 // Return whether charging is currently permitted.
-bool SimpBMS::ChargeAllowed()
+bool DilithiumMCU::ChargeAllowed()
 {
    // Refuse to charge if the BMS is not sending data.
    if(!BMSDataValid()) return false;
@@ -61,14 +61,14 @@ bool SimpBMS::ChargeAllowed()
 }
 
 // Return the maximum charge current allowed by the BMS.
-float SimpBMS::MaxChargeCurrent()
+float DilithiumMCU::MaxChargeCurrent()
 {
    if(!ChargeAllowed()) return 0;
    return chargeCurrentLimit * 0.1;
 }
 
-// Process voltage and temperature message from SimpBMS.
-void SimpBMS::DecodeCAN(int id, uint8_t *data)
+// Process voltage and temperature message from DilithiumMCU.
+void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
 {
    if (id == 0x373)
    {
@@ -91,7 +91,7 @@ void SimpBMS::DecodeCAN(int id, uint8_t *data)
    }
 }
 
-void SimpBMS::Task100Ms() {
+void DilithiumMCU::Task100Ms() {
    // Decrement timeout counter.
    if(timeoutCounter > 0) timeoutCounter--;
 

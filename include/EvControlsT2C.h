@@ -18,15 +18,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef OUTLANDERINVERTER_H
-#define OUTLANDERINVERTER_H
+#ifndef EVCONTROLST2C_H
+#define EVCONTROLST2C_H
 
 #include <inverter.h>
 
-class OutlanderInverter : public Inverter
+class EvControlsT2C : public Inverter
 {
 public:
-   OutlanderInverter();
+   EvControlsT2C();
    void SetCanInterface(CanHardware* c);
    void DecodeCAN(int id, uint32_t data[2]);
    void Task10Ms();
@@ -41,12 +41,16 @@ public:
 private:
    uint8_t run10ms;
    uint32_t lastRecv;
-   int16_t speed;
    int16_t inv_temp;
+   int16_t speed;
+   int16_t voltage;
    int16_t motor_temp;
    bool error;
-   uint16_t voltage;
    uint32_t final_torque_request;
+   static float temp_1, temp_2;
+
+   static void handle289(uint32_t data[2]);
+   static void handle299(uint32_t data[2]);
 };
 
-#endif // OUTLANDERINVERTER_H
+#endif // EVCONTROLST2C_H

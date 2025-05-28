@@ -30,13 +30,13 @@
 //Next param id (increase when adding new parameter!): 139
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
-    PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,      8,      0,      5  ) \
+    PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,      9,      0,      5  ) \
     PARAM_ENTRY(CAT_SETUP,     Vehicle,      VEHMODES, 0,      8,      0,      6  ) \
     PARAM_ENTRY(CAT_SETUP,     GearLvr,      SHIFTERS, 0,      4,      0,      108 ) \
     PARAM_ENTRY(CAT_SETUP,     Transmission, TRNMODES, 0,      1,      0,      78 ) \
     PARAM_ENTRY(CAT_SETUP,     interface,    CHGINT,    0,     4,      0,      39 ) \
     PARAM_ENTRY(CAT_SETUP,     chargemodes,  CHGMODS,   0,     6,      0,      37 ) \
-    PARAM_ENTRY(CAT_SETUP,     BMS_Mode,    BMSMODES,  0,      5,      0,      90 ) \
+    PARAM_ENTRY(CAT_SETUP,     BMS_Mode,    BMSMODES,  0,      6,      0,      90 ) \
     PARAM_ENTRY(CAT_SETUP,     ShuntType,   SHNTYPE,   0,      3,      0,      88 ) \
     PARAM_ENTRY(CAT_SETUP,     InverterCan,  CAN_DEV,  0,      1,      0,      70 ) \
     PARAM_ENTRY(CAT_SETUP,     VehicleCan,   CAN_DEV,  0,      1,      1,      71 ) \
@@ -265,10 +265,10 @@
 #define POTMODES     "0=SingleChannel, 1=DualChannel"
 #define BTNSWITCH    "0=Button, 1=Switch, 2=CAN"
 #define DIRMODES     "0=Button, 1=Switch, 2=ButtonReversed, 3=SwitchReversed, 4=DefaultForward"
-#define INVMODES     "0=None, 1=Leaf_Gen1, 2=GS450H, 3=UserCAN, 4=OpenI, 5=Prius_Gen3, 6=Outlander, 7=GS300H, 8=RearOutlander"
+#define INVMODES     "0=None, 1=Leaf_Gen1, 2=GS450H, 3=UserCAN, 4=OpenI, 5=Prius_Gen3, 6=Outlander, 7=GS300H, 8=RearOutlander, 9=EvControls_T2C"
 #define PLTMODES     "0=Absent, 1=ACStd, 2=ACchg, 3=Error, 4=CCS_Not_Rdy, 5=CCS_Rdy, 6=Static"
 #define VEHMODES     "0=BMW_E46, 1=BMW_E6x+, 2=Classic, 3=None, 5=BMW_E39, 6=VAG, 7=Subaru, 8=BMW_E31"
-#define BMSMODES     "0=Off, 1=SimpBMS, 2=TiDaisychainSingle, 3=TiDaisychainDual, 4=LeafBms, 5=RenaultKangoo33"
+#define BMSMODES     "0=Off, 1=SimpBMS, 2=TiDaisychainSingle, 3=TiDaisychainDual, 4=LeafBms, 5=RenaultKangoo33, 6=DilithiumMCU"
 #define OPMODES      "0=Off, 1=Run, 2=Precharge, 3=PchFail, 4=Charge"
 #define DOW          "0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat"
 #define CHGTYPS      "0=Off, 1=AC, 2=DCFC"
@@ -361,7 +361,8 @@ enum InvModes
     Prius_Gen3 = 5,
     Outlander = 6,
     GS300H = 7,
-    RearOutlander = 8
+    RearOutlander = 8,
+    T2C = 9,
 };
 
 enum ChargeModes
@@ -399,14 +400,14 @@ enum BMSModes
     BMSModeDaisychainSingleBMS = 2,
     BMSModeDaisychainDualBMS = 3,
     BMSModeLeafBMS = 4,
-    BMSRenaultKangoo33BMS = 5
+    BMSRenaultKangoo33BMS = 5,
+    BMSDilithiumMCU = 6
 };
 
 enum DCDCModes
 {
     NoDCDC = 0,
     TeslaG2 = 1
-
 };
 
 enum ShifterModes
@@ -416,7 +417,6 @@ enum ShifterModes
     JLRG1 = 2,
     JLRG2 =3,
     BMWE65 =4
-
 };
 
 enum ChargeControl
@@ -442,7 +442,8 @@ enum vehicles
     vBMW_E39 = 5,
     vVAG = 6,
     vSUBARU = 7,
-    vBMW_E31 = 8
+    vBMW_E31 = 8,
+    vBMW_E90 = 9
 };
 
 enum _potmodes
