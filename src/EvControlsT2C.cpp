@@ -48,17 +48,29 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
     {
     case 0x108: // ID264DIR_torque
         // DIR_axleSpeed: 40|16@1- (0.1,0) [-2750|2750] "RPM"
-        speed = ((int16_t)((bytes[5] << 8) | bytes[4])) * 0.1f;
+        speed = ((int16_t)((bytes[5] << 8) | bytes[4])) * 0.9f; // Rotor RPM (axle * 9)
+        Param::SetInt(Param::speed, speed);
+        // DIR_axleTrq: 24|16@1- (1,0) [-32768|32767] "Nm"
+        torque = (int16_t)((bytes[3] << 8) | bytes[2]) * 1.0f;
+        Param::SetFloat(Param::torque, torque);
         break;
+
     case 0x126: // ID126RearHVStatus
         // RearHighVoltage126: 0|10@1+ (0.5,0) [0|500] "V"
         voltage = ((bytes[0] | (bytes[1] & 0x03) << 8)) * 0.5f;
+        Param::SetFloat(Param::INVudc, voltage);
+        // RearMotorCurrent126: 11|11@1+ (1,0) [0|2047] "A"
+        idcMotor = ((bytes[1] >> 3) | (bytes[2] & 0x1F) << 5) * 1.0f;
+        Param::SetFloat(Param::idcMotor, idcMotor);
         break;
+
     case 0x315: // ID315RearInverterTemps
         // DIR_motorTemp: 16|8@1+ (1,-40) [-40|215] "C"
-        // DIR_IGBTJunctTemp: 24|8@1+ (1,-40) [-40|215] "C"
         motor_temp = (int8_t)bytes[2] + 40; // Signed 8-bit, offset -40
+        Param::SetInt(Param::tmpm, motor_temp);
+        // DIR_IGBTJunctTemp: 24|8@1+ (1,-40) [-40|215] "C"
         inv_temp = (int8_t)bytes[3] + 40;   // Signed 8-bit, offset -40
+        Param::SetInt(Param::tmphs, inv_temp);
         break;
     }
 }
@@ -95,6 +107,9 @@ void EvControlsT2C::Task100Ms()
         }
     }
     counter++;
+
+    motorPower = (idcMotor * voltage) / 1000.0f; // kW
+    Param::SetFloat(Param::motorPower, motorPower);
 }
 
 void EvControlsT2C::setGear()

@@ -51,6 +51,9 @@ private:
    bool error;
    uint32_t final_torque_request;
    static float temp_1, temp_2;
+   float motorPower = 0;
+   float torque = 0;
+   float idcMotor = 0;
 
    static void handle289(uint32_t data[2]);
    static void handle299(uint32_t data[2]);

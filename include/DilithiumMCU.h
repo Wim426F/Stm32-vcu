@@ -34,11 +34,20 @@ class DilithiumMCU: public BMS
    private:
       bool BMSDataValid();
       bool ChargeAllowed();
-      int chargeCurrentLimit = 0;
+      float chargeCurrentLimit = 0;
       int timeoutCounter = 0;
       float minCellV = 0;
       float maxCellV = 0;
       float minTempC = 0;
       float maxTempC = 0;
+      float udc = 0;
+      float deltaV = 0;
+      float power = 0;
+      float idc = 0;
+      float KWh = 0;
+      float AMPh = 0;
+      float SOC = 0;
+      float BMS_Tavg = 0;
+      float BMS_Isolation = 0;
 };
 #endif // DILITHIUMMCU_H
