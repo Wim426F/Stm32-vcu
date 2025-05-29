@@ -38,6 +38,9 @@ public:
    float GetMotorSpeed() { return speed; }
    int GetInverterState() { return error; }
 
+   // Ev-Controls T2C specific function
+   void setGear();
+
 private:
    uint8_t run10ms;
    uint32_t lastRecv;

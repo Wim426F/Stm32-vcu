@@ -31,74 +31,67 @@
 void DilithiumMCU::SetCanInterface(CanHardware* c)
 {
    can = c;
-   can->RegisterUserMessage(0x373);
-   can->RegisterUserMessage(0x351);
+   can->RegisterUserMessage(0x293); // MCU display PDO2 MISO
 }
 
-bool DilithiumMCU::BMSDataValid() {
-   // Return false if primary BMS is not sending data.
-   if(timeoutCounter < 1) return false;
+bool DilithiumMCU::BMSDataValid()
+{
+   if (timeoutCounter < 1) return false;
    return true;
 }
 
-// Return whether charging is currently permitted.
 bool DilithiumMCU::ChargeAllowed()
 {
-   // Refuse to charge if the BMS is not sending data.
-   if(!BMSDataValid()) return false;
-
-   // Refuse to charge if the voltage or temperature is out of range.
-   if(maxCellV > Param::GetFloat(Param::BMS_VmaxLimit)) return false;
-   if(minCellV < Param::GetFloat(Param::BMS_VminLimit)) return false;
-   if(maxTempC > Param::GetFloat(Param::BMS_TmaxLimit)) return false;
-   if(minTempC < Param::GetFloat(Param::BMS_TminLimit)) return false;
-
-   // Refuse to charge if the current limit is zero.
-   if(chargeCurrentLimit < 0.5) return false;
-
-   // Otherwise, charging is permitted.
+   if (!BMSDataValid()) return false;
+   if (maxCellV > Param::GetFloat(Param::BMS_VmaxLimit)) return false;
+   if (minCellV < Param::GetFloat(Param::BMS_VminLimit)) return false;
+   if (maxTempC > Param::GetFloat(Param::BMS_TmaxLimit)) return false;
+   if (minTempC < Param::GetFloat(Param::BMS_TminLimit)) return false;
    return true;
 }
 
-// Return the maximum charge current allowed by the BMS.
 float DilithiumMCU::MaxChargeCurrent()
 {
-   if(!ChargeAllowed()) return 0;
-   return chargeCurrentLimit * 0.1;
+   if (!ChargeAllowed()) return 0;
+   return 0; // No chargeCurrentLimit available
 }
 
-// Process voltage and temperature message from DilithiumMCU.
 void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
 {
-   if (id == 0x373)
+   if (id == 0x293)
    {
-      int minCell = data[0] | (data[1] << 8);
-      int maxCell = data[2] | (data[3] << 8);
-      int minTemp = data[4] | (data[5] << 8);
-      int maxTemp = data[6] | (data[7] << 8);
-
-      minCellV = minCell / 1000.0;
-      maxCellV = maxCell / 1000.0;
-      minTempC = minTemp - 273;
-      maxTempC = maxTemp - 273;
-
-      // Reset timeout counter to the full timeout value
-      timeoutCounter = Param::GetInt(Param::BMS_Timeout) * 10;
-   }
-   else if (id == 0x351)
-   {
-      chargeCurrentLimit = data[2] | (data[3] << 8);
+      switch (data[0]) // B0 indicates message type
+      {
+         case 0x03: // Cell Voltage Summary
+            // CV Low: bytes 2-3, 16-bit unsigned, 1 mV
+            minCellV = ((data[2] | (data[3] << 8)) / 1000.0f);
+            // CV High: bytes 6-7, 16-bit unsigned, 1 mV
+            maxCellV = ((data[6] | (data[7] << 8)) / 1000.0f);
+            break;
+         case 0x04: // Thermistor Summary
+            // THMin: bytes 2-3, THMax: bytes 4-5, 16-bit signed, 0.1°C
+            minTempC = ((int16_t)(data[3] << 8) | data[2]) * 0.1f;
+            maxTempC = ((int16_t)(data[5] << 8) | data[4]) * 0.1f;
+            break;
+      }
+      // Reset timeout
+      timeoutCounter = (uint8_t)(Param::GetInt(Param::BMS_Timeout) * 10);
    }
 }
 
-void DilithiumMCU::Task100Ms() {
-   // Decrement timeout counter.
-   if(timeoutCounter > 0) timeoutCounter--;
+void DilithiumMCU::Task100Ms()
+{
+   // Send PDO2 MOSI request (0x313)
+   uint8_t request[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; // All 0 for one-shot request
+   can->Send(0x313, request, 8);
 
-   // Update informational parameters.
+   // Update timeout
+   if (timeoutCounter > 0) timeoutCounter--;
+
    Param::SetInt(Param::BMS_ChargeLim, MaxChargeCurrent());
 
-   if(BMSDataValid()) {
+   if (BMSDataValid())
+   {
       Param::SetFloat(Param::BMS_Vmin, minCellV);
       Param::SetFloat(Param::BMS_Vmax, maxCellV);
       Param::SetFloat(Param::BMS_Tmin, minTempC);

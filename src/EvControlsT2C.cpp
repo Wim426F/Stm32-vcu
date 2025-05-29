@@ -21,103 +21,95 @@
 #include "EvControlsT2C.h"
 #include "my_math.h"
 #include "params.h"
-#include "OutlanderHeartBeat.h"
+
+enum ShiftCommand {
+    DRIVE_SHIFT_COMMAND = 0x0D,
+    NEUTRAL_SHIFT_COMMAND = 0x0E,
+    REVERSE_SHIFT_COMMAND = 0x0F
+};
 
 EvControlsT2C::EvControlsT2C()
 {
-    //ctor
 }
 
 void EvControlsT2C::SetCanInterface(CanHardware* c)
 {
-    OutlanderHeartBeat::SetCanInterface(c);//set Outlander Heartbeat on same CAN
-
     can = c;
 
-    can->RegisterUserMessage(0x289);//Outlander Inv Msg
-    can->RegisterUserMessage(0x299);//Outlander Inv Msg
-    can->RegisterUserMessage(0x733);//Outlander Inv Msg
+    can->RegisterUserMessage(0x108);
+    can->RegisterUserMessage(0x126);
+    can->RegisterUserMessage(0x315);
 }
 
 void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
 {
-    uint8_t* bytes = (uint8_t*)data;// arrgghhh this converts the two 32bit array into bytes. See comments are useful:)
+    uint8_t* bytes = (uint8_t*)data;
     switch (id)
     {
-    case 0x289:
-        //speed = (((data[0] >> 8)& 0xFF00) | ((data[0] >> 24) & 0x0FF)) - 20000;
-        //voltage = ((data[1] & 0xFF) << 8) | ((data[1] >> 8) & 0xFF);
-        speed = (bytes[2] * 256 | bytes[3]) - 20000;
-        voltage = (bytes[4] * 256) + bytes[5];
+    case 0x108: // ID264DIR_torque
+        // DIR_axleSpeed: 40|16@1- (0.1,0) [-2750|2750] "RPM"
+        speed = ((int16_t)((bytes[5] << 8) | bytes[4])) * 0.1f;
         break;
-    case 0x299:
-        //motor_temp = bytes[0] -40;
-        inv_temp = ((bytes[1]-40) + (bytes[4] - 40)) / 2;
+    case 0x126: // ID126RearHVStatus
+        // RearHighVoltage126: 0|10@1+ (0.5,0) [0|500] "V"
+        voltage = ((bytes[0] | (bytes[1] & 0x03) << 8)) * 0.5f;
         break;
-    case 0x733:
-        motor_temp = bytes[0] -40; //
+    case 0x315: // ID315RearInverterTemps
+        // DIR_motorTemp: 16|8@1+ (1,-40) [-40|215] "C"
+        // DIR_IGBTJunctTemp: 24|8@1+ (1,-40) [-40|215] "C"
+        motor_temp = (int8_t)bytes[2] + 40; // Signed 8-bit, offset -40
+        inv_temp = (int8_t)bytes[3] + 40;   // Signed 8-bit, offset -40
         break;
-
-
     }
 }
 
 void EvControlsT2C::SetTorque(float torquePercent)
 {
-
-    if(Param::GetInt(Param::reversemotor) == 0)
-    {
-
-        final_torque_request = 10000 + (torquePercent * 20); //!! Moved into parameter *-1 reverses torque direction
-    }
-    else
-    {
-        final_torque_request = 10000 - (torquePercent * 20);
-    }
-
-    Param::SetInt(Param::torque,final_torque_request);//post processed final torque value sent to inv to web interface
 }
 
 void EvControlsT2C::Task10Ms()
 {
-    run10ms++;
-
-    //Run every 50 ms
-    if (run10ms == 5)
-    {
-        uint32_t data[2];
-        run10ms = 0;
-
-        data[0] = (final_torque_request & 0xff)<<24 | (final_torque_request & 0xff00)<<8; // swap high and low bytes and shift 16 bit left
-        // enable inverter. Byte 6 0x0 to disable inverter, 0x3 for drive ( torque > 0 )
-        data[1] = (final_torque_request == 10000 ? 0x00 : 0x03)<<16;
-
-        can->Send(0x287, data, 8);
-    }
 }
 
 void EvControlsT2C::Task100Ms()
 {
-    int opmode = Param::GetInt(Param::opmode);
-    if(opmode==MOD_RUN)
-    {
-        uint32_t data[8];
+    static int counter = 0;
+    if (counter >= 5) { // 5 * 100ms = run actually at 500ms loop
+        counter = 0;
 
-        data[0] = 0x00000030;
-        data[1] = 0x00000000;
+        int opmode = Param::GetInt(Param::opmode);
+        if (opmode == MOD_RUN) {
+            // Power and Regen Control (ID 0x696)
+            int max_power = Param::GetInt(Param::idcmax) * Param::GetInt(Param::udc) / 1000; // in kW
+            Param::SetFloat(Param::maxPower, max_power);
+            int max_regen = Param::GetInt(Param::regenmax); // % of max current
 
-        can->Send(0x371, data, 8);
-
-        /*
-        data[0] = 0x39140000; // inverter enabled B2 0x10 - 0x1F
-
-        can->Send(0x285, data, 8);
-        */
-
-        data[0] = 0x3D000000;
-        data[1] = 0x00210000;
-
-        can->Send(0x286, data, 8);
-
+            uint16_t discharge_kW_x100 = (uint16_t)(max_power * 100); // Convert to kW * 100
+            uint16_t regen_kW_x100 = (uint16_t)(max_regen * max_power); // Convert % to kW * 100
+            uint8_t bytes[8] = {
+                (uint8_t)(discharge_kW_x100 >> 8), (uint8_t)discharge_kW_x100,
+                (uint8_t)(regen_kW_x100 >> 8), (uint8_t)regen_kW_x100,
+                0x00, 0x00, 0x00, 0x00
+            };
+            can->Send(0x696, bytes, 8);
+        }
     }
+    counter++;
+}
+
+void EvControlsT2C::setGear()
+{
+    uint8_t shift_command = NEUTRAL_SHIFT_COMMAND;
+
+    if (Param::GetInt(Param::dir) == GearDir::Forward)  
+        shift_command = DRIVE_SHIFT_COMMAND;
+
+    if (Param::GetInt(Param::dir) == GearDir::Neutral)  
+        shift_command = NEUTRAL_SHIFT_COMMAND;
+
+    if (Param::GetInt(Param::dir) == GearDir::Reverse)  
+        shift_command = REVERSE_SHIFT_COMMAND;
+
+    uint8_t bytes[8] = {shift_command, 0xBE, 0xEF, 0x00, 0x00, 0x00, 0x00, 0x00};
+    can->Send(0x697, bytes, 8);
 }

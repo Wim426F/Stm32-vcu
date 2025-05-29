@@ -479,6 +479,23 @@ static void Ms100Task(void)
     {
         IOMatrix::GetPin(IOMatrix::HVACTIVE)->Clear();//HV Active Off
     }
+
+    // Send 5 shift messages in a row to T2C on direction change
+    if (Param::GetInt(Param::Inverter) == InvModes::T2C && opmode==MOD_RUN) {
+        static int last_gear = GearDir::Neutral;
+        static int burst_count = 0;
+        int gear_dir = Param::GetInt(Param::dir);
+
+        if (gear_dir != last_gear) {
+            burst_count = 5; // Start burst of 4 messages
+            last_gear = gear_dir;
+        }
+
+        if (burst_count > 0) {
+            evControlsT2C.setGear();
+            burst_count--;
+        }
+    }
 }
 
 static void ControlCabHeater(int opmode)

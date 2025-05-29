@@ -34,7 +34,7 @@ class DilithiumMCU: public BMS
    private:
       bool BMSDataValid();
       bool ChargeAllowed();
-      int chargeCurrentLimit = 0;  // Sent by Simp as 0.1A per digit and stored the same way.
+      int chargeCurrentLimit = 0;
       int timeoutCounter = 0;
       float minCellV = 0;
       float maxCellV = 0;

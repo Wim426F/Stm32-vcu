@@ -162,6 +162,7 @@
     VALUE_ENTRY(deltaV,        "V",                 2009 ) \
     VALUE_ENTRY(INVudc,        "V",                 2010 ) \
     VALUE_ENTRY(power,         "kW",                2011 ) \
+    VALUE_ENTRY(maxPower,      "kW",                2108 ) \
     VALUE_ENTRY(idc,           "A",                 2012 ) \
     VALUE_ENTRY(KWh,           "kwh",               2013 ) \
     VALUE_ENTRY(AMPh,          "Ah",                2014 ) \
@@ -244,7 +245,7 @@
     VALUE_ENTRY(powerheater,   "W",                 2098 ) \
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
 
-//Next value Id: 2108
+//Next value Id: 2109
 
 //Dead params
 /*
@@ -349,6 +350,15 @@ enum _dirmodes
     DIR_SWITCH = 1,
     DIR_REVERSED = 2,
     DIR_DEFAULTFORWARD = 4
+};
+
+
+enum GearDir    
+{
+    Reverse = -1,
+    Neutral = 0,
+    Forward = 1,
+    Park = 2
 };
 
 enum InvModes

@@ -48,4 +48,4 @@ stm32_vcu.bin
 test_vcu
 
 # hex output - only keep for releases
-stm32_vcu.hex
+#stm32_vcu.hex
