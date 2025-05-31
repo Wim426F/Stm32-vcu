@@ -190,6 +190,7 @@ static SimpBMS BMSsimp;
 static LeafBMS BMSleaf;
 static DaisychainBMS BMSdaisychain;
 static KangooBMS BMSRenaultKangoo33;
+static DilithiumMCU BMSDilithium;
 static DCDC DCDCnone;
 static TeslaDCDC DCDCTesla;
 static BMS* selectedBMS = &BMSnone;
@@ -942,7 +943,7 @@ static void UpdateBMS()
         selectedBMS = &BMSRenaultKangoo33;
         break;
     case BMSModes::BMSDilithiumMCU:
-        selectedBMS = &BMSRenaultKangoo33;
+        selectedBMS = &BMSDilithium;
         break;
     default:
         // Default to no BMS

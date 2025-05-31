@@ -136,6 +136,7 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::BMS_Tmin, minTempC);
       Param::SetFloat(Param::BMS_Tmax, maxTempC);
       Param::SetFloat(Param::udc, udc);
+      Param::SetFloat(Param::udcsw, udc - 10); //Set for precharging based on actual voltage
       Param::SetFloat(Param::deltaV, deltaV);
       Param::SetFloat(Param::power, power);
       Param::SetFloat(Param::idc, idc);
@@ -152,6 +153,7 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::BMS_Tmin, 0);
       Param::SetFloat(Param::BMS_Tmax, 0);
       Param::SetFloat(Param::udc, 0);
+      Param::SetFloat(Param::udcsw, Param::GetFloat(Param::udcmin)); // not 0 otherwise precharge succeeds doing nothing
       Param::SetFloat(Param::deltaV, 0);
       Param::SetFloat(Param::power, 0);
       Param::SetFloat(Param::idc, 0);

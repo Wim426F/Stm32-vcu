@@ -54,9 +54,6 @@ private:
    float motorPower = 0;
    float torque = 0;
    float idcMotor = 0;
-
-   static void handle289(uint32_t data[2]);
-   static void handle299(uint32_t data[2]);
 };
 
 #endif // EVCONTROLST2C_H
