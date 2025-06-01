@@ -18,6 +18,7 @@
  */
 
 #include "DilithiumMCU.h"
+#include "errormessage.h"
 
 /*
  * This module receives messages from DilithiumMCU and updates the
@@ -38,7 +39,11 @@ void DilithiumMCU::SetCanInterface(CanHardware* c)
 bool DilithiumMCU::BMSDataValid()
 {
    // Return false if primary BMS is not sending data.
-   if (timeoutCounter < 1) return false;
+   if (timeoutCounter < 1)
+   {
+      ErrorMessage::Post(ERR_BMSCOMM);
+      return false;
+   }
    return true;
 }
 
@@ -162,5 +167,10 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::SOC, 0);
       Param::SetFloat(Param::BMS_Tavg, 0);
       Param::SetFloat(Param::BMS_Isolation, 0);
+   }
+
+   if (BMS_Isolation < Param::GetInt(Param::BMS_IsoLimit))
+   {
+      ErrorMessage::Post(ERR_ISOLATION);
    }
 }
