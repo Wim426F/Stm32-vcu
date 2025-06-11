@@ -39,9 +39,14 @@ void DilithiumMCU::SetCanInterface(CanHardware* c)
 bool DilithiumMCU::BMSDataValid()
 {
    // Return false if primary BMS is not sending data.
-   if (timeoutCounter < 1)
+   if (timeoutCounterBMS < 1)
    {
-      ErrorMessage::Post(ERR_BMSCOMM);
+      ErrorMessage::Post(ERR_BMS_COMM);
+      return false;
+   }
+   if (timeoutCounterGFM < 1)
+   {
+      ErrorMessage::Post(ERR_GFM_COMM);
       return false;
    }
    return true;
@@ -80,55 +85,55 @@ void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
       switch (data[0]) // B0 indicates message type
       {
          case 0x02: // Pack Summary
-            // Pack Voltage: bytes 2-3, 16-bit unsigned, 0.1 V
-            udc = ((data[2] | (data[3] << 8)) * 0.1f);
-            // Pack Current: bytes 4-5, 16-bit signed, 0.1 A
-            idc = ((int16_t)(data[5] << 8) | data[4]) * 0.1f;
+            battVoltage = ((data[2] | (data[3] << 8)) * 0.1f); // PackVoltage
+            battCurrent = ((int16_t)(data[5] << 8) | data[4]) * 0.1f; // PackCurrent
             break;
          case 0x03: // Cell Voltage Summary
-            // CV Low: bytes 2-3, 16-bit unsigned, 1 mV
-            minCellV = ((data[2] | (data[3] << 8)) / 1000.0f);
-            // CV High: bytes 6-7, 16-bit unsigned, 1 mV
-            maxCellV = ((data[6] | (data[7] << 8)) / 1000.0f);
+            minCellV = ((data[2] | (data[3] << 8)) / 10000.0f); // CVLow
+            maxCellV = ((data[6] | (data[7] << 8)) / 10000.0f); // CVHigh
             break;
          case 0x04: // Thermistor Summary
-            // THMin: bytes 2-3, THMax: bytes 4-5, 16-bit signed, 0.1°C
-            minTempC = ((int16_t)(data[3] << 8) | data[2]) * 0.1f;
-            maxTempC = ((int16_t)(data[5] << 8) | data[4]) * 0.1f;
+            minTempC = (int8_t)data[2] * 0.1f; // TMin
+            maxTempC = (int8_t)data[3] * 0.1f; // TMax
             break;
          case 0x05: // SOC Summary
-            // SOC: byte 1, 8-bit unsigned, 1%
-            SOC = data[1] * 1.0f;
-            // PackKWHr: bytes 2-3, 16-bit unsigned, 0.1 kWh
-            KWh = ((data[2] | (data[3] << 8)) * 0.1f);
+            SOC = data[1] * 1.0f; // SOC
+            KWh = ((data[2] | (data[3] << 8)) * 0.1f); // PackKWHr
+            MaxkWh = ((data[4] | (data[5] << 8)) * 0.1f); // PackMaxKWHr
             break;
          case 0x0f: // GFM Summary
-            // Isolation: byte 2, 8-bit unsigned, Ohms/V * udc
-            BMS_Isolation = data[2] * udc;
+            BMS_Isolation = ((data[2] | (data[3] << 8)) * battVoltage); // GroundFaultIsolation
+            timeoutCounterGFM = (uint8_t)(Param::GetInt(Param::BMS_Timeout) * 10);
+            break;
+         case 0x01: // MCU Summary
+            uint16_t alerts = (data[6] | (data[7] << 8)); // Alerts
             break;
       }
       // Reset timeout
-      timeoutCounter = (uint8_t)(Param::GetInt(Param::BMS_Timeout) * 10);
+      timeoutCounterBMS = (uint8_t)(Param::GetInt(Param::BMS_Timeout) * 10);
    }
-   else if (id == 0x351) // ZEVCCS BM3_LIMITS
-   {
-      // CCHi,CCLo: bytes 2-3, 16-bit signed, 0.1 A
-      chargeCurrentLimit = ((int16_t)(data[3] << 8) | data[2]) * 0.1f;
-   }
+   else if (id == 0x351) // ZEVCCS BMS_LIMITS
+{
+   // TargetChargeCurrent: bytes 3-2, 16-bit unsigned, 0.1 A
+   chargeCurrentLimit = ((data[3] << 8) | data[2]) * 0.1f;
+   // DischargeCurrentLimit: byte 4, 8-bit unsigned, 0.1 A
+   dischargeCurrentLimit = (data[4]) * 0.1f;
+}
 }
 
 void DilithiumMCU::Task100Ms()
 {
    // Send PDO2 MOSI request (0x313)
-   uint8_t request[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; // All 0 for continuous
+   uint8_t request[8] = {0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00}; // All 0 for continuous
    can->Send(0x313, request, 8);
 
    // Update timeout
-   if (timeoutCounter > 0) timeoutCounter--;
+   if (timeoutCounterBMS > 0) timeoutCounterBMS--;
+   if (timeoutCounterGFM > 0) timeoutCounterGFM--;
 
    // Calculate derived values
-   deltaV = maxCellV - minCellV;
-   power = (udc * idc) / 1000.0f;
+   deltaV = (maxCellV - minCellV) * 1000;
+   power = (battVoltage * battCurrent) / 1000.0f;
    AMPh = (KWh * 1000.0f) / (3.7f * 73.0f);
    BMS_Tavg = (minTempC + maxTempC) / 2.0f;
 
@@ -140,16 +145,18 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::BMS_Vmax, maxCellV);
       Param::SetFloat(Param::BMS_Tmin, minTempC);
       Param::SetFloat(Param::BMS_Tmax, maxTempC);
-      Param::SetFloat(Param::udc, udc);
-      Param::SetFloat(Param::udcsw, udc - 10); //Set for precharging based on actual voltage
+      Param::SetFloat(Param::udc2, battVoltage); // udc2 is battery voltage, udc is bus voltage
+      Param::SetFloat(Param::udcsw, battVoltage - 5); //Set for precharging based on actual voltage
       Param::SetFloat(Param::deltaV, deltaV);
       Param::SetFloat(Param::power, power);
-      Param::SetFloat(Param::idc, idc);
+      Param::SetFloat(Param::idc, battCurrent);
       Param::SetFloat(Param::KWh, KWh);
+      Param::SetFloat(Param::BattCap, MaxkWh);
       Param::SetFloat(Param::AMPh, AMPh);
       Param::SetFloat(Param::SOC, SOC);
       Param::SetFloat(Param::BMS_Tavg, BMS_Tavg);
       Param::SetFloat(Param::BMS_Isolation, BMS_Isolation);
+      Param::SetFloat(Param::BMS_ChargeLim, chargeCurrentLimit);
    }
    else
    {
@@ -157,7 +164,7 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::BMS_Vmax, 0);
       Param::SetFloat(Param::BMS_Tmin, 0);
       Param::SetFloat(Param::BMS_Tmax, 0);
-      Param::SetFloat(Param::udc, 0);
+      Param::SetFloat(Param::udc2, 0);
       Param::SetFloat(Param::udcsw, Param::GetFloat(Param::udcmin)); // not 0 otherwise precharge succeeds doing nothing
       Param::SetFloat(Param::deltaV, 0);
       Param::SetFloat(Param::power, 0);
@@ -169,7 +176,7 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::BMS_Isolation, 0);
    }
 
-   if (BMS_Isolation < Param::GetInt(Param::BMS_IsoLimit))
+   if (BMS_Isolation < Param::GetInt(Param::BMS_IsoLimit) && timeoutCounterGFM < 1)
    {
       ErrorMessage::Post(ERR_ISOLATION);
    }

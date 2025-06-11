@@ -35,16 +35,19 @@ class DilithiumMCU: public BMS
       bool BMSDataValid();
       bool ChargeAllowed();
       float chargeCurrentLimit = 0;
-      int timeoutCounter = 0;
+      float dischargeCurrentLimit = 0;
+      int timeoutCounterBMS = 0;
+      int timeoutCounterGFM = 0;
       float minCellV = 0;
       float maxCellV = 0;
       float minTempC = 0;
       float maxTempC = 0;
-      float udc = 0;
+      float battVoltage = 0; // udc2 is battery voltage, udc is bus voltage
       float deltaV = 0;
       float power = 0;
-      float idc = 0;
+      float battCurrent = 0;
       float KWh = 0;
+      float MaxkWh = 0;
       float AMPh = 0;
       float SOC = 0;
       float BMS_Tavg = 0;

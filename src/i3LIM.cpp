@@ -260,7 +260,7 @@ void i3LIMClass::Task10Ms()
     bytes[4] = SOC_Local & 0xFF;;  //Battery SOC LSB. 12 bit unsigned int. Scale 0.1. 0-100%
     bytes[5] = SOC_Local >> 8;  //Battery SOC MSB. 12 bit unsigned int. Scale 0.1. 0-100%
     bytes[6] = 0x65;  //Low nibble battery status. Seem to need to be 0x5.
-    bytes[7] = V_Batt2;  //zwischenkreis. Battery voltage. Scale 4. 8 bit unsigned int.
+    bytes[7] = V_Batt2;  //DC_link voltage. Scale 4. 8 bit unsigned int.
 
     can->Send(0x112, (uint32_t*)bytes,8); //
 

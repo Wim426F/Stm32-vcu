@@ -106,6 +106,7 @@
 #include "OutlanderHeartBeat.h"
 #include "EvControlsT2C.h"
 #include "DilithiumMCU.h"
+#include "hvcu_box.h"
 
 #define PRECHARGE_TIMEOUT 5  //5s
 
@@ -389,6 +390,7 @@ static void Ms100Task(void)
     selectedShifter->Task100Ms();
     selectedHeater->Task100Ms();
     canMap->SendAll();
+    HVCU::Task100Ms();
 
     if(OutlanderCAN == true)
     {
@@ -741,8 +743,7 @@ static void Ms10Task(void)
     ControlCabHeater(opmode);
     if (Param::GetInt(Param::ShuntType) == 2)  SBOX::ControlContactors(opmode,canInterface[Param::GetInt(Param::ShuntCan)]);//BMW contactor box
     if (Param::GetInt(Param::ShuntType) == 3)  VWBOX::ControlContactors(opmode,canInterface[Param::GetInt(Param::ShuntCan)]);//VW contactor box
-
-
+    if (Param::GetInt(Param::ShuntType) == 4)  HVCU::ControlContactors(opmode,canInterface[Param::GetInt(Param::ShuntCan)]);//Custom contactor box in E90
 }
 
 static void Ms1Task(void)
@@ -1028,7 +1029,7 @@ static void SetCanFilters()
     CanHardware* obd2_can = canInterface[Param::GetInt(Param::OBD2Can)];
     CanHardware* dcdc_can = canInterface[Param::GetInt(Param::DCDCCan)];
     CanHardware* heater_can = canInterface[Param::GetInt(Param::HeaterCan)];
-
+    
     selectedInverter->SetCanInterface(inverter_can);
     selectedVehicle->SetCanInterface(vehicle_can);
     selectedCharger->SetCanInterface(charger_can);
@@ -1042,6 +1043,7 @@ static void SetCanFilters()
     if (Param::GetInt(Param::ShuntType) == 1)  ISA::RegisterCanMessages(shunt_can);//select isa shunt
     if (Param::GetInt(Param::ShuntType) == 2)  SBOX::RegisterCanMessages(shunt_can);//select bmw sbox
     if (Param::GetInt(Param::ShuntType) == 3)  VWBOX::RegisterCanMessages(shunt_can);//select vw sbox
+    if (Param::GetInt(Param::ShuntType) == 4)  HVCU::RegisterCanMessages(shunt_can);//select vw sbox
 
     canInterface[1]->RegisterUserMessage(0x601); //CanSDO
     canInterface[0]->RegisterUserMessage(0x601); //CanSDO
@@ -1178,6 +1180,8 @@ static bool CanCallback(uint32_t id, uint32_t data[2], uint8_t dlc) //This is wh
         if (Param::GetInt(Param::ShuntType) == 1)  ISA::DecodeCAN(id, data);
         if (Param::GetInt(Param::ShuntType) == 2)  SBOX::DecodeCAN(id, data);
         if (Param::GetInt(Param::ShuntType) == 3)  VWBOX::DecodeCAN(id, data);
+        if (Param::GetInt(Param::ShuntType) == 4)  HVCU::DecodeCAN(id, data);
+
         selectedInverter->DecodeCAN(id, data);
         selectedVehicle->DecodeCAN(id, data);
         selectedCharger->DecodeCAN(id, data);
@@ -1207,7 +1211,7 @@ extern "C" void tim4_isr(void)
 }
 
 
-extern "C" void exti15_10_isr(void)    //CAN3 MCP25625 interruppt
+extern "C" void exti15_10_isr(void)    //CAN3 MCP25625 interrupt
 {
     uCAN_MSG rxMessage;
     uint32_t canData[2];
@@ -1264,25 +1268,24 @@ extern "C" int main(void)
     DigIo::mcp_sby.Clear();//enable can3
 
     Terminal t(USART3, TermCmds);
-//   FunctionPointerCallback canCb(CanCallback, SetCanFilters);
+
+    // CANBUS 
     Stm32Can c(CAN1, CanHardware::Baud500);
     Stm32Can c2(CAN2, CanHardware::Baud500, true);
     FunctionPointerCallback cb(CanCallback, SetCanFilters);
+
     Stm32Can *CanMapDev = &c;
-    if (Param::GetInt(Param::CanMapCan) == 0)
-    {
+    if (Param::GetInt(Param::CanMapCan) == 0) {
         CanMapDev = &c;
     }
-    else
-    {
+    else {
         CanMapDev = &c2;
     }
     CanMap cm(CanMapDev);
     CanSdo sdo(&c, &cm);
     sdo.SetNodeId(3);//id 3 for vcu?
+
     // Set up CAN 1 callback and messages to listen for
-//  c.AddReceiveCallback(&canCb);
-//  c2.AddReceiveCallback(&canCb);
     canInterface[0] = &c;
     canInterface[1] = &c2;
     c.AddCallback(&cb);

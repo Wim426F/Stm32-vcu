@@ -59,6 +59,7 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
         // RearHighVoltage126: 0|10@1+ (0.5,0) [0|500] "V"
         voltage = ((bytes[0] | (bytes[1] & 0x03) << 8)) * 0.5f;
         Param::SetFloat(Param::INVudc, voltage);
+        Param::SetFloat(Param::udc, voltage); // udc is bus voltage, udc2 is battery voltage
         // RearMotorCurrent126: 11|11@1+ (1,0) [0|2047] "A"
         idcMotor = ((bytes[1] >> 3) | (bytes[2] & 0x1F) << 5) * 1.0f;
         Param::SetFloat(Param::idcMotor, idcMotor);
@@ -92,15 +93,16 @@ void EvControlsT2C::Task100Ms()
         int opmode = Param::GetInt(Param::opmode);
         if (opmode == MOD_RUN) {
             // Power and Regen Control (ID 0x696)
-            int max_power = Param::GetInt(Param::idcmax) * Param::GetInt(Param::udc) / 1000; // in kW
+            int max_power = Param::GetInt(Param::idcmax) * Param::GetInt(Param::udc) / 1000; // in kW, discharge limit
             Param::SetFloat(Param::maxPower, max_power);
-            int max_regen = Param::GetInt(Param::regenmax); // % of max current
-
-            uint16_t discharge_kW_x100 = (uint16_t)(max_power * 100); // Convert to kW * 100
-            uint16_t regen_kW_x100 = (uint16_t)(max_regen * max_power); // Convert % to kW * 100
+            int max_regen_current = Param::GetInt(Param::regenmax) * Param::GetInt(Param::idcmax) / 100; // % of idcmax in amps
+            int max_regen = max_regen_current * Param::GetInt(Param::udc) / 1000; // in kW
+        
+            uint16_t power_kW_x100 = (uint16_t)(max_power * 100); // power limit in kW, factor is 0.01
+            uint16_t regen_kW_x100 = (uint16_t)(max_regen * 100); // regen limit in kW, factor is 0.01
             uint8_t bytes[8] = {
-                (uint8_t)(discharge_kW_x100 >> 8), (uint8_t)discharge_kW_x100,
-                (uint8_t)(regen_kW_x100 >> 8), (uint8_t)regen_kW_x100,
+                (uint8_t)(power_kW_x100 >> 8), (uint8_t)(power_kW_x100 & 0xFF), // Big-endian discharge limit
+                (uint8_t)(regen_kW_x100 >> 8), (uint8_t)(regen_kW_x100 & 0xFF),       // Big-endian regen limit
                 0x00, 0x00, 0x00, 0x00
             };
             can->Send(0x696, bytes, 8);

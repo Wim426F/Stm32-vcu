@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.22.Wim
+#define VER 2.23.Wim
 
 
 /* Entries must be ordered as follows:
@@ -27,7 +27,7 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 139
+//Next param id (increase when adding new parameter!): 144
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,      9,      0,      5  ) \
@@ -37,7 +37,7 @@
     PARAM_ENTRY(CAT_SETUP,     interface,    CHGINT,    0,     4,      0,      39 ) \
     PARAM_ENTRY(CAT_SETUP,     chargemodes,  CHGMODS,   0,     6,      0,      37 ) \
     PARAM_ENTRY(CAT_SETUP,     BMS_Mode,    BMSMODES,  0,      6,      0,      90 ) \
-    PARAM_ENTRY(CAT_SETUP,     ShuntType,   SHNTYPE,   0,      3,      0,      88 ) \
+    PARAM_ENTRY(CAT_SETUP,     ShuntType,   SHNTYPE,   0,      4,      0,      88 ) \
     PARAM_ENTRY(CAT_SETUP,     InverterCan,  CAN_DEV,  0,      1,      0,      70 ) \
     PARAM_ENTRY(CAT_SETUP,     VehicleCan,   CAN_DEV,  0,      1,      1,      71 ) \
     PARAM_ENTRY(CAT_SETUP,     ShuntCan,     CAN_DEV,  0,      1,      0,      72 ) \
@@ -49,6 +49,7 @@
     PARAM_ENTRY(CAT_SETUP,     DCDCCan,      CAN_DEV,  0,      1,      1,      107 ) \
     PARAM_ENTRY(CAT_SETUP,     HeaterCan,    CAN_DEV,  0,      1,      1,      138 ) \
     PARAM_ENTRY(CAT_SETUP,     MotActive,    MotorsAct,0,      3,      0,      129 ) \
+    PARAM_ENTRY(CAT_SETUP,     CanTimeout,  "dig",     0,      120,    10,     143 ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmin,      "dig",     0,      4095,   0,      7  ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmax,      "dig",     0,      4095,   4095,   8  ) \
     PARAM_ENTRY(CAT_THROTTLE,  pot2min,     "dig",     0,      4095,   4095,   9  ) \
@@ -105,6 +106,7 @@
     PARAM_ENTRY(CAT_BMS,       BMS_VmaxLimit, "V",     0,      10,     4.2,    93 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_TminLimit, "°C",    -100,   100,    5,      94 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_TmaxLimit, "°C",    -100,   100,    50,     95 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,      100000, 500,   139 ) \
     PARAM_ENTRY(CAT_HEATER,    Heater,      HTTYPE,    0,      3,      0,      57 ) \
     PARAM_ENTRY(CAT_HEATER,    Control,     HTCTRL,    0,      2,      0,      58 ) \
     PARAM_ENTRY(CAT_HEATER,    HeatPwr,     "W",       0,      6500,   0,      59 ) \
@@ -159,14 +161,14 @@
     VALUE_ENTRY(udc,           "V",                 2006 ) \
     VALUE_ENTRY(udc2,          "V",                 2007 ) \
     VALUE_ENTRY(udc3,          "V",                 2008 ) \
-    VALUE_ENTRY(deltaV,        "V",                 2009 ) \
+    VALUE_ENTRY(deltaV,        "mV",                2009 ) \
     VALUE_ENTRY(INVudc,        "V",                 2010 ) \
     VALUE_ENTRY(power,         "kW",                2011 ) \
-    VALUE_ENTRY(maxPower,      "kW",                2108 ) \
     VALUE_ENTRY(motorPower,    "kW",                2110 ) \
+    VALUE_ENTRY(maxPower,      "kW",                2108 ) \
     VALUE_ENTRY(idc,           "A",                 2012 ) \
     VALUE_ENTRY(idcMotor,      "A",                 2109 ) \
-    VALUE_ENTRY(KWh,           "kwh",               2013 ) \
+    VALUE_ENTRY(KWh,           "kWh",               2013 ) \
     VALUE_ENTRY(AMPh,          "Ah",                2014 ) \
     VALUE_ENTRY(SOC,           "%",                 2015 ) \
     VALUE_ENTRY(BMS_Vmin,      "V",                 2084 ) \
@@ -263,7 +265,7 @@
                      "18=GS450pump"
 #define APINFUNCS    "0=None, 1=ProxPilot, 2=BrakeVacSensor"
 #define SHIFTERS     "0=None, 1=BMW_F30, 2=JLR_G1, 3=JLR_G2, 4=BMW_E65"
-#define SHNTYPE      "0=None, 1=ISA, 2=SBOX, 3=VAG"
+#define SHNTYPE      "0=None, 1=ISA, 2=SBOX, 3=VAG, 4=HVCU"
 #define DMODES       "0=CLOSED, 1=OPEN, 2=ERROR, 3=INVALID"
 #define POTMODES     "0=SingleChannel, 1=DualChannel"
 #define BTNSWITCH    "0=Button, 1=Switch, 2=CAN"
@@ -402,7 +404,7 @@ enum HeatType
     Noheater = 0,
     AmpHeater = 1,
     VW = 2,
-        OutlanderHeater = 3
+    OutlanderHeater = 3
 };
 
 enum BMSModes
