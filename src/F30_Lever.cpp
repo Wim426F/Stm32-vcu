@@ -169,7 +169,6 @@ void F30_Lever::DecodeCAN(int id, uint32_t* data)
 }
 
 void F30_Lever::UpdateShifter() {
-
   switch (Dir) {
     case Off:
       Dir = Neutral;
@@ -177,11 +176,11 @@ void F30_Lever::UpdateShifter() {
 
     case Neutral:
       if (DirChanged == false) {
-        if (Up2 == true) {
+        if (Up2 == true && Param::GetInt(Param::din_brake)) {
           Dir = Reverse;
           this->gear = REVERSE;
           DirChanged = true;
-        } else if (Down2 == true) {
+        } else if (Down2 == true && Param::GetInt(Param::din_brake)) {
           Dir = Drive;
           this->gear = DRIVE;
           DirChanged = true;
@@ -238,7 +237,7 @@ void F30_Lever::UpdateShifter() {
       break;
 
     case Park:
-      if (ParkBut == true && ParkChange == false) {
+      if (ParkBut == true && ParkChange == false && Param::GetInt(Param::din_brake)) {
         Dir = Neutral;
         this->gear = NEUTRAL;
         ParkChange = true;

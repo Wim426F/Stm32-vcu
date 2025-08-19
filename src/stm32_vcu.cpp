@@ -108,8 +108,6 @@
 #include "DilithiumMCU.h"
 #include "hvcu_box.h"
 
-#define PRECHARGE_TIMEOUT 5  //5s
-
 #define PRINT_JSON 0
 
 
@@ -358,8 +356,6 @@ static void Ms200Task(void)
     {
         IOMatrix::GetPin(IOMatrix::BRAKEVACPUMP)->Clear();
     }
-
-
 }
 
 static void Ms100Task(void)
@@ -609,13 +605,19 @@ static void Ms10Task(void)
     }
     if(opmode==MOD_RUN) Param::SetInt(Param::canctr, (Param::GetInt(Param::canctr) + 1) & 0xF);//Update the OI can counter in RUN mode only
 
+
+
+
+
     //////////////////////////////////////////////////
     //            MODE CONTROL SECTION              //
     //////////////////////////////////////////////////
+
     float udc = utils::ProcessUdc(speed);
     stt |= Param::GetInt(Param::pot) <= Param::GetInt(Param::potmin) ? STAT_NONE : STAT_POTPRESSED;
     stt |= udc >= Param::GetFloat(Param::udcsw) ? STAT_NONE : STAT_UDCBELOWUDCSW;
     stt |= udc < Param::GetFloat(Param::udclim) ? STAT_NONE : STAT_UDCLIM;
+    stt |= Param::GetInt(Param::BMS_Isolation) < Param::GetInt(Param::BMS_IsoLimit) && opmode != MOD_OFF ? STAT_ISOFAULT : STAT_NONE; //gfm is only on with key so dont trigger fault when its off.
     Param::SetInt(Param::status, stt);
 
     switch (opmode)
@@ -671,7 +673,7 @@ static void Ms10Task(void)
         IOMatrix::GetPin(IOMatrix::COOLANTPUMP)->Set();
         if(rlyDly!=0) rlyDly--;//here we are going to pause before energising precharge to prevent too many contactors pulling amps at the same time
         if(rlyDly==0) DigIo::prec_out.Set();//commence precharge
-        if ((stt & (STAT_POTPRESSED | STAT_UDCBELOWUDCSW | STAT_UDCLIM)) == STAT_NONE)
+        if ((stt & (STAT_POTPRESSED | STAT_UDCBELOWUDCSW | STAT_UDCLIM | STAT_ISOFAULT)) == STAT_NONE)
         {
             if(StartSig)
             {
@@ -690,7 +692,7 @@ static void Ms10Task(void)
         }
         if(initbyCharge && !chargeMode) opmode = MOD_OFF;// These two statements catch a precharge hang from either start mode or run mode.
         if(initbyStart && !selectedVehicle->Ready()) opmode = MOD_OFF;
-        if (udc < (Param::GetInt(Param::udcsw)) && rtc_get_counter_val() > (vehicleStartTime + PRECHARGE_TIMEOUT))
+        if (opmode == MOD_PRECHARGE && rtc_get_counter_val() > (vehicleStartTime + Param::GetInt(Param::PrechargeTimeout)))
         {
             DigIo::prec_out.Clear();
             ErrorMessage::Post(ERR_PRECHARGE);

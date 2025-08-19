@@ -53,7 +53,6 @@ void BMW_E90::SetCanInterface(CanHardware* c)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void BMW_E90::DecodeCAN(int id, uint32_t* data)
 {
-
     switch (id)
     {
     case 0x130:
@@ -199,7 +198,7 @@ void BMW_E90::Task200Ms()
 
     if(CANWake)
     {
-        //update shitPos over CAN
+        //update shiftPos over CAN
         int selectedDir = Param::GetInt(Param::dir);
 
         if (selectedDir == 0)
@@ -298,9 +297,9 @@ void BMW_E90::SendAbsDscMessages(bool Brake_In)
         bytes[6] = 0x84;
         bytes[7] = 0x00;
     }
-    bytes[3] = 0x00;             //Pedal position 0-255
-    bytes[4] = RPM_A & 0xff;   //lowByte(RPM_A);
-    bytes[5] = RPM_A>>8 & 0xff;;  //highByte(RPM_A);
+    bytes[3] = 0x00;                // Pedal position 0-255
+    bytes[4] = RPM_A & 0xff;        // lowByte(RPM_A);
+    bytes[5] = RPM_A>>8 & 0xff;;    // highByte(RPM_A);
 
 
     ///Check sum math for 0x0AA///
@@ -311,9 +310,7 @@ void BMW_E90::SendAbsDscMessages(bool Brake_In)
 
     can->Send(0x0AA, bytes, 8); //Send on CAN
 
-
     uint8_t a8_brake;
-
 
     if(Brake_In)
     {
@@ -378,13 +375,13 @@ void BMW_E90::SendAbsDscMessages(bool Brake_In)
 
     if (BA5==0x5C) //reload initial condition
     {
-        AA1 = 0x0;  //0x0AA second counter byte
-        A80=0xbe;//0x0A8 first counter byte
-        A81=0x00;//0x0A8 second counter byte
-        A90=0xe9;//0x0A9 first counter byte
-        A91=0x00;//0x0A9 second counter byte
-        BA5=0x4d;//0x0BA first counter byte(byte 5)
-        BA6=0x80;//0x0BA second counter byte(byte 6)
+        AA1 = 0x0;  // 0x0AA second counter byte
+        A80=0xbe;   // 0x0A8 first counter byte
+        A81=0x00;   // 0x0A8 second counter byte
+        A90=0xe9;   // 0x0A9 first counter byte
+        A91=0x00;   // 0x0A9 second counter byte
+        BA5=0x4d;   // 0x0BA first counter byte(byte 5)
+        BA6=0x80;   // 0x0BA second counter byte(byte 6)
     }
 
 }
@@ -423,7 +420,7 @@ void BMW_E90::Engine_Data()
     bytes[3] = 0xC3;
 
     bytes[6] = 0xCD;
-    bytes[7] = 0x82;  //Idle Traget
+    bytes[7] = 0x82;  //Idle Target
 
     can->Send(0x1D0,bytes,8); //Send on CAN
 

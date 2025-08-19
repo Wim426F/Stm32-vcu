@@ -89,8 +89,8 @@ void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
             battCurrent = ((int16_t)(data[5] << 8) | data[4]) * 0.1f; // PackCurrent
             break;
          case 0x03: // Cell Voltage Summary
-            minCellV = ((data[2] | (data[3] << 8)) / 10000.0f); // CVLow
-            maxCellV = ((data[6] | (data[7] << 8)) / 10000.0f); // CVHigh
+            minCellV = ((data[2] | (data[3] << 8)) / 10.0f); // CVLow
+            maxCellV = ((data[6] | (data[7] << 8)) / 10.0f); // CVHigh
             break;
          case 0x04: // Thermistor Summary
             minTempC = (int8_t)data[2] * 0.1f; // TMin
@@ -102,7 +102,7 @@ void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
             MaxkWh = ((data[4] | (data[5] << 8)) * 0.1f); // PackMaxKWHr
             break;
          case 0x0f: // GFM Summary
-            BMS_Isolation = ((data[2] | (data[3] << 8)) * battVoltage); // GroundFaultIsolation
+            BMS_Isolation = (data[2] | (data[3] << 8)); // GroundFaultIsolation in Ohm/v
             timeoutCounterGFM = (uint8_t)(Param::GetInt(Param::BMS_Timeout) * 10);
             break;
          case 0x01: // MCU Summary
@@ -110,7 +110,8 @@ void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
             break;
       }
       // Reset timeout
-      timeoutCounterBMS = (uint8_t)(Param::GetInt(Param::BMS_Timeout) * 10);
+      if(data[0] != 0x0f) // make sure its not the GFM that we hear
+         timeoutCounterBMS = (uint8_t)(Param::GetInt(Param::BMS_Timeout) * 10);
    }
    else if (id == 0x351) // ZEVCCS BMS_LIMITS
 {
@@ -124,7 +125,7 @@ void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
 void DilithiumMCU::Task100Ms()
 {
    // Send PDO2 MOSI request (0x313)
-   uint8_t request[8] = {0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00}; // All 0 for continuous
+   uint8_t request[8] = {0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00};
    can->Send(0x313, request, 8);
 
    // Update timeout
@@ -132,7 +133,7 @@ void DilithiumMCU::Task100Ms()
    if (timeoutCounterGFM > 0) timeoutCounterGFM--;
 
    // Calculate derived values
-   deltaV = (maxCellV - minCellV) * 1000;
+   deltaV = (maxCellV - minCellV);
    power = (battVoltage * battCurrent) / 1000.0f;
    AMPh = (KWh * 1000.0f) / (3.7f * 73.0f);
    BMS_Tavg = (minTempC + maxTempC) / 2.0f;
@@ -146,7 +147,7 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::BMS_Tmin, minTempC);
       Param::SetFloat(Param::BMS_Tmax, maxTempC);
       Param::SetFloat(Param::udc2, battVoltage); // udc2 is battery voltage, udc is bus voltage
-      Param::SetFloat(Param::udcsw, battVoltage - 5); //Set for precharging based on actual voltage
+      Param::SetFloat(Param::udcsw, battVoltage - 15); //Set for precharging based on actual voltage
       Param::SetFloat(Param::deltaV, deltaV);
       Param::SetFloat(Param::power, power);
       Param::SetFloat(Param::idc, battCurrent);
@@ -155,7 +156,8 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::AMPh, AMPh);
       Param::SetFloat(Param::SOC, SOC);
       Param::SetFloat(Param::BMS_Tavg, BMS_Tavg);
-      Param::SetFloat(Param::BMS_Isolation, BMS_Isolation);
+      Param::SetFloat(Param::BMS_IsoMeas, BMS_Isolation); // isolation in Ohm/v
+      Param::SetFloat(Param::BMS_Isolation, (BMS_Isolation*battVoltage)); // total isolation in Ohm
       Param::SetFloat(Param::BMS_ChargeLim, chargeCurrentLimit);
    }
    else
@@ -165,7 +167,7 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::BMS_Tmin, 0);
       Param::SetFloat(Param::BMS_Tmax, 0);
       Param::SetFloat(Param::udc2, 0);
-      Param::SetFloat(Param::udcsw, Param::GetFloat(Param::udcmin)); // not 0 otherwise precharge succeeds doing nothing
+      Param::SetFloat(Param::udcsw, Param::GetFloat(Param::udcmin)); // not 0 otherwise precharge succeeds at 0v
       Param::SetFloat(Param::deltaV, 0);
       Param::SetFloat(Param::power, 0);
       Param::SetFloat(Param::idc, 0);
@@ -176,7 +178,7 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::BMS_Isolation, 0);
    }
 
-   if (BMS_Isolation < Param::GetInt(Param::BMS_IsoLimit) && timeoutCounterGFM < 1)
+   if (BMS_Isolation < Param::GetInt(Param::BMS_IsoLimit) && timeoutCounterGFM > 1)
    {
       ErrorMessage::Post(ERR_ISOLATION);
    }

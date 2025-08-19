@@ -54,6 +54,7 @@ private:
    float motorPower = 0;
    float torque = 0;
    float idcMotor = 0;
+   int timeoutCounterInv = 0;
 };
 
 #endif // EVCONTROLST2C_H

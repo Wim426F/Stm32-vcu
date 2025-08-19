@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.23.Wim
+#define VER 2.27.Wim
 
 
 /* Entries must be ordered as follows:
@@ -27,7 +27,7 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 144
+//Next param id (increase when adding new parameter!): 146
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,      9,      0,      5  ) \
@@ -49,7 +49,9 @@
     PARAM_ENTRY(CAT_SETUP,     DCDCCan,      CAN_DEV,  0,      1,      1,      107 ) \
     PARAM_ENTRY(CAT_SETUP,     HeaterCan,    CAN_DEV,  0,      1,      1,      138 ) \
     PARAM_ENTRY(CAT_SETUP,     MotActive,    MotorsAct,0,      3,      0,      129 ) \
-    PARAM_ENTRY(CAT_SETUP,     CanTimeout,  "dig",     0,      120,    10,     143 ) \
+    PARAM_ENTRY(CAT_SETUP,     CanTimeout,  "sec",     0,      120,    10,     143 ) \
+    PARAM_ENTRY(CAT_SETUP,     InvTimeout,  "sec",     0,      120,    1,      144 ) \
+    PARAM_ENTRY(CAT_SETUP,     PrechargeTimeout,  "sec",     1,      10,     2,      145 ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmin,      "dig",     0,      4095,   0,      7  ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmax,      "dig",     0,      4095,   4095,   8  ) \
     PARAM_ENTRY(CAT_THROTTLE,  pot2min,     "dig",     0,      4095,   4095,   9  ) \
@@ -96,9 +98,9 @@
     PARAM_ENTRY(CAT_CHARGER,   CCS_SOCLim,  "%",       0,      100,    80,     44 ) \
     PARAM_ENTRY(CAT_CHARGER,   SOCFC,       "%",       0,      100,    50,     79 ) \
     PARAM_ENTRY(CAT_CHARGER,   Chgctrl,     CHGCTRL,   0,      2,      0,      45 ) \
-    PARAM_ENTRY(CAT_CHARGER,   ChgAcVolt,   "Vac",     0,      250,   240,     120 ) \
-    PARAM_ENTRY(CAT_CHARGER,   ChgEff,     "%",       0,      100,   90,      121) \
-    PARAM_ENTRY(CAT_CHARGER,   ConfigFoccci,  ONOFF,     0,      1,      0,     133) \
+    PARAM_ENTRY(CAT_CHARGER,   ChgAcVolt,   "Vac",     0,      250,    240,    120 ) \
+    PARAM_ENTRY(CAT_CHARGER,   ChgEff,     "%",        0,      100,    90,     121) \
+    PARAM_ENTRY(CAT_CHARGER,   ConfigFoccci,  ONOFF,   0,      1,      0,      133) \
     PARAM_ENTRY(CAT_DCDC,      DCdc_Type,   DCDCTYPES, 0,      1,      0,      105 ) \
     PARAM_ENTRY(CAT_DCDC,      DCSetPnt,    "V",       9,      15,     14,     106 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_Timeout,  "sec",    1,      120,    10,     91 ) \
@@ -106,7 +108,7 @@
     PARAM_ENTRY(CAT_BMS,       BMS_VmaxLimit, "V",     0,      10,     4.2,    93 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_TminLimit, "°C",    -100,   100,    5,      94 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_TmaxLimit, "°C",    -100,   100,    50,     95 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,      100000, 500,   139 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,      100000, 500,    139 ) \
     PARAM_ENTRY(CAT_HEATER,    Heater,      HTTYPE,    0,      3,      0,      57 ) \
     PARAM_ENTRY(CAT_HEATER,    Control,     HTCTRL,    0,      2,      0,      58 ) \
     PARAM_ENTRY(CAT_HEATER,    HeatPwr,     "W",       0,      6500,   0,      59 ) \
@@ -150,7 +152,7 @@
     PARAM_ENTRY(CAT_PWM,       Tim3_1_OC,   "",        1,      100000, 3600,   102 ) \
     PARAM_ENTRY(CAT_PWM,       Tim3_2_OC,   "",        1,      100000, 3600,   103 ) \
     PARAM_ENTRY(CAT_PWM,       Tim3_3_OC,   "",        1,      100000, 3600,   104 ) \
-    PARAM_ENTRY(CAT_PWM,       CP_PWM,   "",        1,      100, 10,   132 ) \
+    PARAM_ENTRY(CAT_PWM,       CP_PWM,      "",        1,      100,    10,     132 ) \
     VALUE_ENTRY(version,       VERSTR,              2000 ) \
     VALUE_ENTRY(opmode,        OPMODES,             2002 ) \
     VALUE_ENTRY(chgtyp,        CHGTYPS,             2003 ) \
@@ -171,8 +173,8 @@
     VALUE_ENTRY(KWh,           "kWh",               2013 ) \
     VALUE_ENTRY(AMPh,          "Ah",                2014 ) \
     VALUE_ENTRY(SOC,           "%",                 2015 ) \
-    VALUE_ENTRY(BMS_Vmin,      "V",                 2084 ) \
-    VALUE_ENTRY(BMS_Vmax,      "V",                 2085 ) \
+    VALUE_ENTRY(BMS_Vmin,      "mV",                2084 ) \
+    VALUE_ENTRY(BMS_Vmax,      "mV",                2085 ) \
     VALUE_ENTRY(BMS_Tavg,      "°C",                2103 ) \
     VALUE_ENTRY(BMS_Tmin,      "°C",                2086 ) \
     VALUE_ENTRY(BMS_Tmax,      "°C",                2087 ) \
@@ -181,7 +183,7 @@
     VALUE_ENTRY(BMS_MaxOutput, "kW",                2106 ) \
     VALUE_ENTRY(BMS_MaxCharge, "W",                 2101 ) \
     VALUE_ENTRY(BMS_Isolation, "Ohm",               2104 ) \
-    VALUE_ENTRY(BMS_IsoMeas,   "mV",                2099 ) \
+    VALUE_ENTRY(BMS_IsoMeas,   "Ohm/v",             2099 ) \
     VALUE_ENTRY(speed,         "rpm",               2016 ) \
     VALUE_ENTRY(Veh_Speed,     "kph",               2017 ) \
     VALUE_ENTRY(torque,        "dig",               2018 ) \
@@ -193,6 +195,7 @@
     VALUE_ENTRY(dir,           DIRS,                2024 ) \
     VALUE_ENTRY(tmphs,         "°C",                2028 ) \
     VALUE_ENTRY(tmpm,          "°C",                2029 ) \
+    VALUE_ENTRY(tmpinv,        "°C",                2111 ) \
     VALUE_ENTRY(tmpaux,        "°C",                2030 ) \
     VALUE_ENTRY(uaux,          "V",                 2031 ) \
     VALUE_ENTRY(canio,         CANIOS,              2032 ) \
@@ -249,7 +252,7 @@
     VALUE_ENTRY(powerheater,   "W",                 2098 ) \
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
 
-//Next value Id: 2111
+//Next value Id: 2112
 
 //Dead params
 /*
@@ -278,7 +281,7 @@
 #define DOW          "0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat"
 #define CHGTYPS      "0=Off, 1=AC, 2=DCFC"
 #define DCDCTYPES    "0=NoDCDC, 1=TeslaG2"
-#define STATUS       "0=None, 1=UdcLow, 2=UdcHigh, 4=UdcBelowUdcSw, 8=UdcLim, 16=EmcyStop, 32=MProt, 64=PotPressed, 128=TmpHs, 256=WaitStart"
+#define STATUS       "0=None, 1=UdcLow, 2=UdcHigh, 4=UdcBelowUdcSw, 8=UdcLim, 16=EmcyStop, 32=MProt, 64=PotPressed, 128=TmpHs, 256=WaitStart, 512=IsoFault"
 #define CCS_STATUS   "0=NotRdy, 1=ready, 2=SWoff, 3=interruption, 4=Prech, 5=insulmon, 6=estop, 7=malfunction, 15=invalid"
 #define DIRS         "-1=Reverse, 0=Neutral, 1=Drive, 2=Park"
 #define ONOFF        "0=Off, 1=On, 2=na"
@@ -487,7 +490,8 @@ enum status
     STAT_MPROT = 32,
     STAT_POTPRESSED = 64,
     STAT_TMPHS = 128,
-    STAT_WAITSTART = 256
+    STAT_WAITSTART = 256,
+    STAT_ISOFAULT = 512
 };
 
 enum ccs_status

@@ -25,9 +25,12 @@
 */
 
 #include <hvcu_box.h>
+#include "errormessage.h"
 
 #define RELAY_ON 0x02
 #define RELAY_OFF 0x03
+
+int timeoutCounterHVCU = 0;
 
 enum ContactorState {CONTACTOR_OFF, CONTACTOR_STARTUP, CONTACTOR_ECONOMIZED };
 
@@ -48,7 +51,12 @@ void HVCU::DecodeCAN(int id, uint32_t data[2])
 
 void HVCU::Task100Ms()
 {
-   
+   // Update timeout
+   if (timeoutCounterHVCU > 0) timeoutCounterHVCU--;
+   if (timeoutCounterHVCU < 1)
+   {
+      ErrorMessage::Post(ERR_HVCU_COMM);
+   }
 }
 
 
@@ -60,6 +68,8 @@ void HVCU::handle398(uint32_t data[2])  //HVCU Status
    uint8_t mainContactorState = (ContactorState)bytes[2]; // CCS positive contactor state
    uint8_t mcuState = (ContactorState)bytes[3];         // CCS negative contactor state
    uint8_t regenState = bytes[4];                      // Regen input (0 or 1)
+   // Reset timeout
+   timeoutCounterHVCU = (uint8_t)(Param::GetInt(Param::CanTimeout) * 10);
 }
 
 
@@ -93,9 +103,10 @@ void HVCU::ControlContactors(int opmode, CanHardware* can)
             break;
 
          case 1: // Mode Run
-            bytes[1]=RELAY_OFF; // precharge relay 
-            bytes[2]=RELAY_ON;  // negative relay
-            bytes[3]=RELAY_ON;  // positive relay
+            //precharge relay stays on incase main contactor drops out with motor running, which could spike voltage and blow up the inverter
+            bytes[1]=RELAY_ON; // precharge relay
+            bytes[2]=RELAY_ON; // negative relay
+            bytes[3]=RELAY_ON; // positive relay
             break;
 
          case 4: // Mode Charge

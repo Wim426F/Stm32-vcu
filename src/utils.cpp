@@ -65,7 +65,11 @@ void GetDigInputs(CanHardware* can)
 
     Param::SetInt(Param::din_cruise, ((canio & CAN_IO_CRUISE) != 0));
     Param::SetInt(Param::din_start, DigIo::start_in.Get() | ((canio & CAN_IO_START) != 0));
-    Param::SetInt(Param::din_brake, DigIo::brake_in.Get() | ((canio & CAN_IO_BRAKE) != 0));
+    if (Param::GetInt(Param::din_brake) == 0)
+    {
+        Param::SetInt(Param::din_brake, DigIo::brake_in.Get() | ((canio & CAN_IO_BRAKE) != 0));
+    }
+        
     Param::SetInt(Param::din_forward, DigIo::fwd_in.Get() | ((canio & CAN_IO_FWD) != 0));
     Param::SetInt(Param::din_reverse, DigIo::rev_in.Get() | ((canio & CAN_IO_REV) != 0));
     Param::SetInt(Param::din_bms, (canio & CAN_IO_BMS) != 0);
