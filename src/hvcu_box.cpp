@@ -104,7 +104,7 @@ void HVCU::ControlContactors(int opmode, CanHardware* can)
 
          case 1: // Mode Run
             //precharge relay stays on incase main contactor drops out with motor running, which could spike voltage and blow up the inverter
-            bytes[1]=RELAY_ON; // precharge relay
+            bytes[1]=RELAY_OFF; // precharge relay
             bytes[2]=RELAY_ON; // negative relay
             bytes[3]=RELAY_ON; // positive relay
             break;
