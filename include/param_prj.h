@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.28.Wim
+#define VER 2.30.WIM.1
 
 
 /* Entries must be ordered as follows:
@@ -358,7 +358,6 @@ enum _dirmodes
     DIR_REVERSED = 2,
     DIR_DEFAULTFORWARD = 4
 };
-
 
 enum GearDir    
 {
