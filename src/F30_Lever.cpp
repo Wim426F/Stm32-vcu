@@ -186,28 +186,38 @@ void F30_Lever::UpdateShifter() {
           DirChanged = true;
         } else if (ParkBut == true && ParkChange == false) {
           Dir = Park;
+          this->gear = PARK;
           ParkChange = true;
         }
       }
       break;
 
     case Reverse:
-      if (Down2 == true && DirChanged == false) {
-        Dir = Neutral;
-        this->gear = NEUTRAL;
-        DirChanged = true;
-      } else if (ParkBut == true && ParkChange == false) {
-        Dir = Park;
-        this->gear = PARK;
-        ParkChange = true;
+      if (DirChanged == false) {
+        if (Down2 == true && Param::GetInt(Param::din_brake)) {
+          Dir = Drive;
+          this->gear = DRIVE;
+          DirChanged = true;
+        } else if (Down1 == true) {
+          Dir = Neutral;
+          this->gear = NEUTRAL;
+        } else if (ParkBut == true && ParkChange == false) {
+          Dir = Park;
+          this->gear = PARK;
+          ParkChange = true;
+        }
       }
       break;
 
     case Drive:
-      if (Up1 == true && DirChanged == false) {
+    if (DirChanged == false) {
+      if (Up2 == true && Param::GetInt(Param::din_brake)) {
+        Dir = Reverse;
+        this->gear = REVERSE;
+        DirChanged = true;
+      } else if (Up1 == true) {
         Dir = Neutral;
         this->gear = NEUTRAL;
-        DirChanged = true;
       } else if (SportMode == true) {
         Dir = Sport;
       } else if (ParkBut == true && ParkChange == false) {
@@ -215,7 +225,8 @@ void F30_Lever::UpdateShifter() {
         this->gear = PARK;
         ParkChange = true;
       }
-      break;
+    }
+    break;
 
     case Sport:
       if (SportMode == false) {
@@ -235,12 +246,22 @@ void F30_Lever::UpdateShifter() {
         SportChange = true;
       }
       break;
-
+    
     case Park:
-      if (ParkBut == true && ParkChange == false && Param::GetInt(Param::din_brake)) {
-        Dir = Neutral;
-        this->gear = NEUTRAL;
-        ParkChange = true;
+      if (DirChanged == false) {
+        if (Down2 == true && Param::GetInt(Param::din_brake)) {
+          Dir = Drive;
+          this->gear = DRIVE;
+          DirChanged = true;
+        } else if (Up2 == true && Param::GetInt(Param::din_brake)) {
+          Dir = Reverse;
+          this->gear = REVERSE;
+          DirChanged = true;
+        } else if (ParkBut == true && ParkChange == false && Param::GetInt(Param::din_brake)) {
+          Dir = Neutral;
+          this->gear = NEUTRAL;
+          ParkChange = true;
+        }
       }
       break;
 
