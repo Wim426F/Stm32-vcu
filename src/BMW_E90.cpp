@@ -3,7 +3,8 @@
  *
  * Copyright (C) 2020 Johannes Huebner <dev@johanneshuebner.com>
  *               2021-2022 Damien Maguire <info@evbmw.com>
- * Yes I'm really writing software now........run.....run away.......
+ *               2025 Wim Boone <Github:Wim426F>
+ *
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +24,13 @@
 #include "stm32_can.h"
 #include "params.h"
 #include "utils.h"
+
+#ifndef constrain
+#define constrain(x, a, b) ((x) < (a) ? (a) : ((x) > (b) ? (b) : (x)))
+#endif
+
+// Const int for target RPM (e.g., 750 rpm idle)
+const int TARGET_IDLE_RPM = 750;
 
 static uint8_t  Gcount; //gear display counter byte
 static uint8_t shiftPos=0xe1; //contains byte to display gear position on dash.default to park
@@ -47,6 +55,8 @@ void BMW_E90::SetCanInterface(CanHardware* c)
     can->RegisterUserMessage(0x2FC);//E90 Enclosure status
     can->RegisterUserMessage(0x480);//Network Management
     can->RegisterUserMessage(0x1A0);//Speed
+
+    can->RegisterUserMessage(0x3FE);//Parking brake status
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////Handle incomming pt can messages from the car here
@@ -70,6 +80,15 @@ void BMW_E90::DecodeCAN(int id, uint32_t* data)
     case 0x480:
         BMW_E90::handle480(data);
         break;
+    
+    case 0xB6:
+        BMW_E90::handleB6(data);
+        break;
+    
+    case 0x3FE:
+        BMW_E90::handle3FE(data);
+        break;
+    
 
     default:
         break;
@@ -146,6 +165,16 @@ void BMW_E90::handle2FC(uint32_t data[2])
     {
         Param::SetInt(Param::VehLockSt,0);
     }
+
+    uint8_t door_bits = bytes[1];
+    Param::SetInt(Param::DriverDoorSt, (door_bits & 0x01) ? 1 : 0); // 1 = Open, 0 = Closed
+    //Param::SetInt(Param::PassengerDoorSt, (door_bits & 0x04) ? 1 : 0); // bit 2
+    //Param::SetInt(Param::RearLeftDoorSt, (door_bits & 0x10) ? 1 : 0); // bit 4
+    //Param::SetInt(Param::RearRightDoorSt, (door_bits & 0x40) ? 1 : 0); // bit 6
+
+    uint8_t ext_bits = bytes[2];
+    //Param::SetInt(Param::TrunkSt, (ext_bits & 0x01) ? 1 : 0);
+    //Param::SetInt(Param::HoodSt, (ext_bits & 0x04) ? 1 : 0);
 }
 
 void BMW_E90::handle480(uint32_t data[2])
@@ -160,6 +189,21 @@ void BMW_E90::handle480(uint32_t data[2])
     {
         CANWake = true;
     }
+}
+
+void BMW_E90::handleB6(uint32_t data[2])
+{
+    uint8_t* bytes = (uint8_t*)data;
+    int16_t raw_torque = (bytes[1] << 8) | bytes[0];  // Little-endian signed
+    float torque_demand = raw_torque * 0.03125f;  // Scale to Nm
+    Param::SetFloat(Param::torqueDemand, torque_demand);  // Set for drive unit to limit
+}
+
+void BMW_E90::handle3FE(uint32_t data[2])
+{
+    uint8_t* bytes = (uint8_t*)data;
+    bool parkingbrake_engaged = bytes[0] == 2 ? 1 : 0;
+    Param::SetInt(Param::handbrk, parkingbrake_engaged);
 }
 
 void BMW_E90::Task10Ms()
@@ -284,7 +328,7 @@ void BMW_E90::SendAbsDscMessages(bool Brake_In)
     uint16_t RPM_A = 0;
     if (Ready())
     {
-        RPM_A = MAX(750, Param::GetInt(Param::speed)) * 4;
+        RPM_A = MAX(TARGET_IDLE_RPM, Param::GetInt(Param::speed)) * 4;
         bytes[1] = 0x50 | AA1;  //Counter for 0xAA Byte 0
         bytes[2] = 0x07;
         bytes[6] = 0x94;
@@ -390,40 +434,70 @@ void BMW_E90::Engine_Data()
 {
     uint8_t bytes[8];
 
+    // Get actual temperatures from params (in °C)
+    float coolant_C = Param::GetFloat(Param::tmphs); // inverter heatsink temp as coolant temp
+    float oil_C = Param::GetFloat(Param::tmpm); // motor temp as oil temp
+
+    // Clamp and scale to raw values (0-207 for -48 to 159°C)
+    uint8_t coolant_raw = (uint8_t)constrain(coolant_C + 48.0f, 0.0f, 207.0f);
+    uint8_t oil_raw = (uint8_t)constrain(oil_C + 48.0f, 0.0f, 207.0f);
+
     uint8_t EngRun = 0x00;
+
+    static float cumulative_uL = 0.0f;  // Cumulative fuel (microliters)
 
     if (Param::GetInt(Param::opmode) == MOD_RUN)
     {
         EngRun = 0x60;
-        uint16_t injectors = 40604;
-        bytes[4] = injectors;
-        bytes[5] = injectors >> 8;
+
+        // Fuel emulation based on power consumption
+        float full_kWh = Param::GetFloat(Param::BattCap);  // Full battery kWh
+        float tank_L = Param::GetFloat(Param::FuelCap);    // Tank liters
+        float f_kWh_per_L = (tank_L > 0.0f) ? full_kWh / tank_L : 1.0f;  // Avoid div0
+
+        float power_kW = Param::GetFloat(Param::power);  // Power in kW (negative=discharge, positive=regen)
+
+        const float interval_s = 0.2f;
+        float interval_hours = interval_s / 3600.0f;
+        float delta_kWh = 0.0f;
+        if (power_kW < 0.0f) {  // Only add consumption during discharge
+            delta_kWh = -power_kW * interval_hours;  // Make positive delta
+        }
+        // Regen (power_kW > 0): delta_kWh remains 0
+
+        float delta_L = delta_kWh / f_kWh_per_L;
+        float delta_uL = delta_L * 1000000.0f;
+
+        cumulative_uL += delta_uL;
+        if (cumulative_uL >= 65536.0f) {
+            cumulative_uL -= 65536.0f;
+        }
+        uint16_t injected_value = (uint16_t)cumulative_uL;  // Cast to 16-bit (0-65535)
+
+        bytes[4] = injected_value & 0xFF;         // Low byte
+        bytes[5] = (injected_value >> 8) & 0xFF;  // High byte
     }
     else
     {
         bytes[4] = 0x00;
         bytes[5] = 0x00;
+        cumulative_uL = 0.0f;  // Reset on stop
     }
 
-    float Curr = Param::GetFloat(Param::idc) * -1;
-    Curr = Curr + 100;
-    float Temp = utils::change(Curr, 0, 500, 50, 150);
-    Temp = Temp + 48;
-    if (Curr > 525)
-    {
-        Temp = 150;
-    }
+    bytes[0] = coolant_raw;  // Coolant temp (raw)
+    bytes[1] = oil_raw;      // Oil temp (raw)
+    bytes[2] = EngRun | C1D00;  // Engine status + counter
+    bytes[3] = 0xC3;         // Air intake press (fixed; adjust if you have manifold press param)
 
-    bytes[0] = 0x3C;            //Engine Coolant Temp
-    bytes[1] = Temp;            //Engine Oil Temp, use to show current
-    bytes[2] = EngRun | C1D00;  //Counter
-    bytes[3] = 0xC3;
+    bytes[6] = 0xCD;         // Status bits (gear lock, limp, etc.; fixed for EV)
 
-    bytes[6] = 0xCD;
-    bytes[7] = 0x82;  //Idle Target
+    // Target idle RPM byte (value = RPM / 5, clamped to 0-255)
+    uint8_t target_rpm_raw = (uint8_t)constrain((float)TARGET_IDLE_RPM / 5.0f, 0.0f, 255.0f);
+    bytes[7] = target_rpm_raw;
 
-    can->Send(0x1D0,bytes,8); //Send on CAN
+    can->Send(0x1D0, bytes, 8);  // Send on CAN
 
+    // Counter logic (4-bit alive counter)
     if (C1D00 == C1D01)
     {
         C1D00++;
@@ -436,14 +510,13 @@ void BMW_E90::Engine_Data()
     {
         C1D01 = C1D00;
     }
-
 }
 
 void BMW_E90::SetFuelGauge(float level)
 {
     int pot1 = 0;
     int pot2 = 0;
-    const int fuelGaugeMap[20][3] =
+    const int fuelGaugeMap[20][3] =  // SOC, pot1, pot2
     {
         { 5, 1, 0 },
         { 10, 1, 1 },

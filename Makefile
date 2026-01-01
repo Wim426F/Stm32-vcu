@@ -51,11 +51,11 @@ OBJS     = $(patsubst %.o,$(OUT_DIR)/%.o, $(OBJSL))
 vpath %.c src/ libopeninv/src/ src/vehicles/ src/chargers/ src/inverters/ src/heaters/ src/bms/ src/shifter/ src/charge_interface/ src/dcdc/
 vpath %.cpp src/ libopeninv/src/ src/vehicles/ src/chargers/ src/inverters/ src/heaters/ src/bms/ src/shifter/ src/charge_interface/ src/dcdc
 
-OPENOCD_BASE	= /usr
-OPENOCD		= $(OPENOCD_BASE)/bin/openocd
-OPENOCD_SCRIPTS	= $(OPENOCD_BASE)/share/openocd/scripts
-OPENOCD_FLASHER	= $(OPENOCD_SCRIPTS)/interface/parport.cfg
-OPENOCD_BOARD	= $(OPENOCD_SCRIPTS)/board/olimex_stm32_h103.cfg
+OPENOCD_BASE	= /c/openocd
+OPENOCD 	= $(OPENOCD_BASE)/bin/openocd.exe
+OPENOCD_SCRIPTS = $(OPENOCD_BASE)/share/openocd/scripts
+OPENOCD_FLASHER	= $(OPENOCD_SCRIPTS)/interface/stlink.cfg
+OPENOCD_BOARD	= $(OPENOCD_SCRIPTS)/target/stm32f1x.cfg
 
 # Be silent per default, but 'make V=1' will show all compiler calls.
 ifneq ($(V),1)

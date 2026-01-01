@@ -435,6 +435,29 @@ float ProcessThrottle(int speed)
 
     Param::SetFloat(Param::potnom, finalSpnt);
 
+
+
+
+    //----------------------------------------------------------------------------------//
+    //                                                                                  //
+    //  Addition for current based derating (for inverters without torque control)      //
+    //                                                                                  //
+    //----------------------------------------------------------------------------------//
+    
+    float udc = Param::GetFloat(Param::udc);
+    float idc = ABS(Param::GetFloat(Param::idc));  // Use ABS for derate calc; adjust if idcMotor used
+    float temp_hs = Param::Get(Param::tmphs);
+    float temp_m = Param::Get(Param::tmpm);
+    int abs_speed = ABS(speed);
+
+    float discharge_factor = Throttle::GetDischargeDerateFactor(udc, idc, temp_hs, temp_m, abs_speed);
+    float derated_discharge_current = Param::GetFloat(Param::idcmax) * discharge_factor;
+    Param::SetFloat(Param::derated_idc, derated_discharge_current);
+
+    float regen_factor = Throttle::GetRegenDerateFactor(udc, idc, temp_hs, temp_m, abs_speed);
+    float derated_regen_current = Param::GetFloat(Param::regenmax) * regen_factor;
+    Param::SetFloat(Param::derated_regen, derated_regen_current);
+
     return finalSpnt;
 }
 

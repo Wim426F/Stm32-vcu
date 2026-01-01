@@ -21,7 +21,7 @@
 #include "iomatrix.h"
 
 DigIo* const IOMatrix::paramToPin[] = { &DigIo::gp_out1, &DigIo::gp_out2, &DigIo::gp_out3,
-                                        &DigIo::SL1_out, &DigIo::SL2_out,
+                                        &DigIo::SL1_out, &DigIo::SL2_out, &DigIo::SP_out,
                                         &DigIo::PWM1, &DigIo::PWM2, &DigIo::PWM3,&DigIo::gp_12Vin,
                                         &DigIo::HV_req,&DigIo::gear1_in,&DigIo::gear2_in,&DigIo::gear3_in};
                                         //order of these matters!

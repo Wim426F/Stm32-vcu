@@ -27,12 +27,12 @@
 
 class IOMatrix
 {
-   public://order of these matters!
+   public://order of these matters! 
       enum pinfuncs
       {
          NONE, CHADEMOALLOW, OBCENABLE, HEATERENABLE, RUNINDICATION, WARNINDICATION,
-         COOLANTPUMP, NEGCONTACTOR, BRAKELIGHT, REVERSELIGHT, HEATREQ, HVREQ,
-         DCFCREQUEST, BRAKEVACPUMP, COOLINGFAN, HVACTIVE, PWM_TIM3,CP_SPOOF,
+         COOLANTPUMP, NEGCONTACTOR, BRAKELIGHT, REVERSELIGHT, HEATREQ, HVREQ, DCFCREQUEST, CHARGESTOP,
+         BRAKEVACPUMP, COOLINGFAN, HVACTIVE, PARKINGBRAKE, T15ON, PWM_TIM3, CP_SPOOF,
          GS450HOIL, LAST
       };
             //order of these matters!
@@ -48,7 +48,7 @@ class IOMatrix
 
    private:
       static DigIo* functionToPin[LAST];
-      static const int numPins = 13;
+      static const int numPins = 14;
       static DigIo* const paramToPin[numPins];
 
       static AnaIn* functionToPinAnalgoue[LAST_ANAL];

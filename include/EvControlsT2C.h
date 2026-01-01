@@ -1,8 +1,7 @@
 /*
  * This file is part of the ZombieVerter project.
  *
- * Copyright (C) 2021-2022  Johannes Huebner <dev@johanneshuebner.com>
- * 	                        Damien Maguire <info@evbmw.com>
+ * Copyright (C) 2025 Wim Boone
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

@@ -21,7 +21,7 @@
 #include "params.h"
 #include "my_math.h"
 
-static bool HVreq=false;
+//static bool HVreq=true;
 static bool ChRun=false;
 static uint8_t counter_109 = 0;
 static uint16_t HVvolts=0;
@@ -41,8 +41,8 @@ void teslaCharger::DecodeCAN(int id, uint32_t data[2])
    uint8_t* bytes = (uint8_t*)data;
    if (id == 0x108)
    {
-     if(bytes[0]==0xAA) HVreq=true;
-     if(bytes[0]==0xCC) HVreq=false;
+     //if(bytes[0]==0xAA) HVreq=true;
+     //if(bytes[0]==0xCC) HVreq=false;
    }
 }
 
@@ -72,9 +72,7 @@ void teslaCharger::Task100Ms()
 bool teslaCharger::ControlCharge(bool RunCh, bool ACReq)
 {
    bool dummy = RunCh;
-   dummy = dummy;
    ChRun = ACReq;
-   if(HVreq) return true;
-   if(!HVreq) return false;
-   return false;
+   if(ACReq) return true;
+   else return false;
 }

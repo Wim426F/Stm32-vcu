@@ -1,7 +1,7 @@
 /*
  * This file is part of the ZombieVerter project.
  *
- * Copyright (C) 2022 Charlie Smurthwaite
+ * Copyright (C) 2025 Wim Boone
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,6 @@ class DilithiumMCU: public BMS
       float MaxChargeCurrent() override;
       void Task100Ms() override;
    private:
-      bool BMSDataValid();
       bool ChargeAllowed();
       float chargeCurrentLimit = 0;
       float dischargeCurrentLimit = 0;

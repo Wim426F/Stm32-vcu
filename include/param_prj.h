@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.30.WIM.1
+#define VER 2.30.WIM.5
 
 
 /* Entries must be ordered as follows:
@@ -27,132 +27,134 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 146
+//Next param id (increase when adding new parameter!): 149
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
-    PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,      9,      0,      5  ) \
-    PARAM_ENTRY(CAT_SETUP,     Vehicle,      VEHMODES, 0,      9,      0,      6  ) \
-    PARAM_ENTRY(CAT_SETUP,     GearLvr,      SHIFTERS, 0,      4,      0,      108 ) \
-    PARAM_ENTRY(CAT_SETUP,     Transmission, TRNMODES, 0,      1,      0,      78 ) \
-    PARAM_ENTRY(CAT_SETUP,     interface,    CHGINT,    0,     4,      0,      39 ) \
-    PARAM_ENTRY(CAT_SETUP,     chargemodes,  CHGMODS,   0,     6,      0,      37 ) \
-    PARAM_ENTRY(CAT_SETUP,     BMS_Mode,    BMSMODES,  0,      6,      0,      90 ) \
-    PARAM_ENTRY(CAT_SETUP,     ShuntType,   SHNTYPE,   0,      4,      0,      88 ) \
-    PARAM_ENTRY(CAT_SETUP,     InverterCan,  CAN_DEV,  0,      1,      0,      70 ) \
-    PARAM_ENTRY(CAT_SETUP,     VehicleCan,   CAN_DEV,  0,      1,      1,      71 ) \
-    PARAM_ENTRY(CAT_SETUP,     ShuntCan,     CAN_DEV,  0,      1,      0,      72 ) \
-    PARAM_ENTRY(CAT_SETUP,     LimCan,       CAN_DEV,  0,      1,      0,      73 ) \
-    PARAM_ENTRY(CAT_SETUP,     ChargerCan,   CAN_DEV,  0,      1,      1,      74 ) \
-    PARAM_ENTRY(CAT_SETUP,     BMSCan,       CAN_DEV,  0,      1,      1,      89 ) \
-    PARAM_ENTRY(CAT_SETUP,     OBD2Can,      CAN_DEV,  0,      1,      0,      96 ) \
-    PARAM_ENTRY(CAT_SETUP,     CanMapCan,    CAN_DEV,  0,      1,      0,      97 ) \
-    PARAM_ENTRY(CAT_SETUP,     DCDCCan,      CAN_DEV,  0,      1,      1,      107 ) \
-    PARAM_ENTRY(CAT_SETUP,     HeaterCan,    CAN_DEV,  0,      1,      1,      138 ) \
-    PARAM_ENTRY(CAT_SETUP,     MotActive,    MotorsAct,0,      3,      0,      129 ) \
-    PARAM_ENTRY(CAT_SETUP,     CanTimeout,  "sec",     0,      120,    10,     143 ) \
-    PARAM_ENTRY(CAT_SETUP,     InvTimeout,  "sec",     0,      120,    1,      144 ) \
-    PARAM_ENTRY(CAT_SETUP,     PrechargeTimeout,  "sec",     1,      10,     2,      145 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  potmin,      "dig",     0,      4095,   0,      7  ) \
-    PARAM_ENTRY(CAT_THROTTLE,  potmax,      "dig",     0,      4095,   4095,   8  ) \
-    PARAM_ENTRY(CAT_THROTTLE,  pot2min,     "dig",     0,      4095,   4095,   9  ) \
-    PARAM_ENTRY(CAT_THROTTLE,  pot2max,     "dig",     0,      4095,   4095,   10 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  regenrpm,    "rpm",    100,      10000,    1500,     60 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  regenendrpm,"rpm",     100,      10000,  100,  126 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  regenmax,     "%",     -35,   0,     -10,     61 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  regenBrake,    "%",    -35,   0,     -10,     122 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  regenramp,   "%/10ms",  0.1,    100,    1,    68 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  potmode,     POTMODES,  0,      1,      0,      11 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  dirmode,     DIRMODES,  0,      4,      1,      12 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  reversemotor,  ONOFF,   0,      1,      0,      127 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  throtramp,   "%/10ms",  1,    100,    10,    13 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  throtramprpm,"rpm",     0,      20000,  20000,  14 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  revlim,      "rpm",     0,      20000,  6000,   15 ) \
+    PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,       9,      0,      5  ) \
+    PARAM_ENTRY(CAT_SETUP,     Vehicle,      VEHMODES, 0,       9,      0,      6  ) \
+    PARAM_ENTRY(CAT_SETUP,     GearLvr,      SHIFTERS, 0,       4,      0,      108 ) \
+    PARAM_ENTRY(CAT_SETUP,     Transmission, TRNMODES, 0,       1,      0,      78 ) \
+    PARAM_ENTRY(CAT_SETUP,     interface,    CHGINT,    0,      4,      0,      39 ) \
+    PARAM_ENTRY(CAT_SETUP,     chargemodes,  CHGMODS,   0,      6,      0,      37 ) \
+    PARAM_ENTRY(CAT_SETUP,     BMS_Mode,    BMSMODES,  0,       6,      0,      90 ) \
+    PARAM_ENTRY(CAT_SETUP,     ShuntType,   SHNTYPE,   0,       4,      0,      147 ) \
+    PARAM_ENTRY(CAT_SETUP,     InverterCan,  CAN_DEV,  0,       1,      0,      70 ) \
+    PARAM_ENTRY(CAT_SETUP,     VehicleCan,   CAN_DEV,  0,       1,      1,      71 ) \
+    PARAM_ENTRY(CAT_SETUP,     ShuntCan,     CAN_DEV,  0,       1,      0,      72 ) \
+    PARAM_ENTRY(CAT_SETUP,     LimCan,       CAN_DEV,  0,       1,      0,      73 ) \
+    PARAM_ENTRY(CAT_SETUP,     ChargerCan,   CAN_DEV,  0,       1,      1,      74 ) \
+    PARAM_ENTRY(CAT_SETUP,     BMSCan,       CAN_DEV,  0,       1,      1,      89 ) \
+    PARAM_ENTRY(CAT_SETUP,     OBD2Can,      CAN_DEV,  0,       1,      0,      96 ) \
+    PARAM_ENTRY(CAT_SETUP,     CanMapCan,    CAN_DEV,  0,       1,      0,      97 ) \
+    PARAM_ENTRY(CAT_SETUP,     DCDCCan,      CAN_DEV,  0,       1,      1,      107 ) \
+    PARAM_ENTRY(CAT_SETUP,     HeaterCan,    CAN_DEV,  0,       1,      1,      138 ) \
+    PARAM_ENTRY(CAT_SETUP,     MotActive,    MotorsAct,0,       3,      0,      129 ) \
+    PARAM_ENTRY(CAT_SETUP,     CanTimeout,  "sec",     0,       120,    10,     143 ) \
+    PARAM_ENTRY(CAT_SETUP,     InvTimeout,  "sec",     0,       120,    1,      144 ) \
+    PARAM_ENTRY(CAT_SETUP,     PrechargeTimeout,"sec", 1,       10,     2,      145 ) \
+    PARAM_ENTRY(CAT_SETUP,     FuelCap,     "Liters",  1,       200,    63,     148 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  potmin,      "dig",     0,       4095,   0,      7  ) \
+    PARAM_ENTRY(CAT_THROTTLE,  potmax,      "dig",     0,       4095,   4095,   8  ) \
+    PARAM_ENTRY(CAT_THROTTLE,  pot2min,     "dig",     0,       4095,   4095,   9  ) \
+    PARAM_ENTRY(CAT_THROTTLE,  pot2max,     "dig",     0,       4095,   4095,   10 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  regenrpm,    "rpm",     100,     10000,  1500,   60 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  regenendrpm,"rpm",      100,     10000,  100,    126 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  regenmax,     "A",     -5000,    0,     -200,    61 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  regenBrake,    "%",    -35,      0,     -10,     122 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  regenramp,   "%/10ms",  0.1,     100,    1,      68 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  potmode,     POTMODES,  0,       1,      0,      11 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  dirmode,     DIRMODES,  0,       4,      1,      12 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  reversemotor,  ONOFF,   0,       1,      0,      127 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  throtramp,   "%/10ms",  1,       100,    10,     13 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  throtramprpm,"rpm",     0,       20000,  20000,  14 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  revlim,      "rpm",     0,       20000,  6000,   15 ) \
     PARAM_ENTRY(CAT_THROTTLE,  revRegen,     ONOFF,    0,       1,      0,      137 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  udcmin,      "V",       0,      1000,   450,    19 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  udclim,      "V",       0,      1000,   520,    20 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  idcmax,      "A",       0,      5000,   5000,   21 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  idcmin,      "A",      -5000,   0,     -5000,   22 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  tmphsmax,    "°C",      50,     150,    85,     23 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  tmpmmax,     "°C",      70,     300,    300,    24 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  throtmax,    "%",       0,      100,    100,    25 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  throtmin,    "%",      -100,    0,     -100,    26 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  throtmaxRev,    "%",       0,      100,    30,    123 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  throtdead,   "%",       0,      50,     10,     76 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  RegenBrakeLight,   "%",    -100,     0,     -15,      128 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  throtrpmfilt,   "rpm/10ms",  0.1,    200,    15,    131 ) \
-    PARAM_ENTRY(CAT_LEXUS,     Gear,        LOWHIGH,   0,      3,      0,      27 ) \
-    PARAM_ENTRY(CAT_LEXUS,     OilPump,     "%",       0,      100,    50,     28 ) \
-    PARAM_ENTRY(CAT_CRUISE,    cruisestep,  "rpm",     1,      1000,   200,    29 ) \
-    PARAM_ENTRY(CAT_CRUISE,    cruiseramp,  "rpm/100ms",1,     1000,   20,     30 ) \
-    PARAM_ENTRY(CAT_CRUISE,    regenlevel,  "",        0,      3,      2,      31 ) \
-    PARAM_ENTRY(CAT_CONTACT,   udcsw,       "V",       0,      1000,   330,    32 ) \
-    PARAM_ENTRY(CAT_CONTACT,   cruiselight, ONOFF,     0,      1,      0,      33 ) \
-    PARAM_ENTRY(CAT_CONTACT,   errlights,   ERRLIGHTS, 0,      255,    0,      34 ) \
-    PARAM_ENTRY(CAT_COMM,      CAN3Speed,   CAN3SPD,   0,      2,      0,      77 ) \
-    PARAM_ENTRY(CAT_CHARGER,   BattCap,     "kWh",     0.1,    250,    22,     38 ) \
-    PARAM_ENTRY(CAT_CHARGER,   Voltspnt,    "V",       0,      1000,   395,    40 ) \
-    PARAM_ENTRY(CAT_CHARGER,   Pwrspnt,     "W",       0,      12000,  1500,   41 ) \
-    PARAM_ENTRY(CAT_CHARGER,   IdcTerm,     "A",       0,      150,    0,      56 ) \
-    PARAM_ENTRY(CAT_CHARGER,   CCS_ICmd,    "A",       0,      150,    0,      42 ) \
-    PARAM_ENTRY(CAT_CHARGER,   CCS_ILim,    "A",       0,      350,    100,    43 ) \
-    PARAM_ENTRY(CAT_CHARGER,   CCS_SOCLim,  "%",       0,      100,    80,     44 ) \
-    PARAM_ENTRY(CAT_CHARGER,   SOCFC,       "%",       0,      100,    50,     79 ) \
-    PARAM_ENTRY(CAT_CHARGER,   Chgctrl,     CHGCTRL,   0,      2,      0,      45 ) \
-    PARAM_ENTRY(CAT_CHARGER,   ChgAcVolt,   "Vac",     0,      250,    240,    120 ) \
-    PARAM_ENTRY(CAT_CHARGER,   ChgEff,     "%",        0,      100,    90,     121) \
-    PARAM_ENTRY(CAT_CHARGER,   ConfigFoccci,  ONOFF,   0,      1,      0,      133) \
-    PARAM_ENTRY(CAT_DCDC,      DCdc_Type,   DCDCTYPES, 0,      1,      0,      105 ) \
-    PARAM_ENTRY(CAT_DCDC,      DCSetPnt,    "V",       9,      15,     14,     106 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_Timeout,  "sec",    1,      120,    10,     91 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_VminLimit, "V",     0,      10,     3.0,    92 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_VmaxLimit, "V",     0,      10,     4.2,    93 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_TminLimit, "°C",    -100,   100,    5,      94 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_TmaxLimit, "°C",    -100,   100,    50,     95 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,      100000, 500,    139 ) \
-    PARAM_ENTRY(CAT_HEATER,    Heater,      HTTYPE,    0,      3,      0,      57 ) \
-    PARAM_ENTRY(CAT_HEATER,    Control,     HTCTRL,    0,      2,      0,      58 ) \
-    PARAM_ENTRY(CAT_HEATER,    HeatPwr,     "W",       0,      6500,   0,      59 ) \
-    PARAM_ENTRY(CAT_HEATER,    HeatPercnt,  "%",       0,      100,    0,      124 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Set_Day,     DOW,       0,      6,      0,      46 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Set_Hour,    "Hours",   0,      23,     0,      47 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Set_Min,     "Mins",    0,      59,     0,      48 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Set_Sec,     "Secs",    0,      59,     0,      49 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Chg_Hrs,     "Hours",   0,      23,     0,      50 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Chg_Min,     "Mins",    0,      59,     0,      51 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Chg_Dur,     "Mins",    0,      600,    0,      52 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Pre_Hrs,     "Hours",   0,      59,     0,      53 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Pre_Min,     "Mins",    0,      59,     0,      54 ) \
-    PARAM_ENTRY(CAT_CLOCK,     Pre_Dur,     "Mins",    0,      60,     0,      55 ) \
-    PARAM_ENTRY(CAT_IOPINS,    PumpPWM,    PumpOutType,0,      1,      0,      135 ) \
-    PARAM_ENTRY(CAT_IOPINS,    Out1Func,    PINFUNCS,  0,      15,     6,      80 ) \
-    PARAM_ENTRY(CAT_IOPINS,    Out2Func,    PINFUNCS,  0,      15,     7,      81 ) \
-    PARAM_ENTRY(CAT_IOPINS,    Out3Func,    PINFUNCS,  0,      15,     3,      82 ) \
-    PARAM_ENTRY(CAT_IOPINS,    SL1Func,     PINFUNCS,  0,      15,     0,      83 ) \
-    PARAM_ENTRY(CAT_IOPINS,    SL2Func,     PINFUNCS,  0,      15,     0,      84 ) \
-    PARAM_ENTRY(CAT_IOPINS,    PWM1Func,    PINFUNCS,  0,      18,     0,      85 ) \
-    PARAM_ENTRY(CAT_IOPINS,    PWM2Func,    PINFUNCS,  0,      18,     4,      86 ) \
-    PARAM_ENTRY(CAT_IOPINS,    PWM3Func,    PINFUNCS,  0,      18,     2,      87 ) \
-    PARAM_ENTRY(CAT_IOPINS,    GP12VInFunc, PINFUNCS,  0,      13,     12,     98 ) \
-    PARAM_ENTRY(CAT_IOPINS,    HVReqFunc,   PINFUNCS,  0,      13,     12,     99 ) \
-    PARAM_ENTRY(CAT_IOPINS,    PB1InFunc,   PINFUNCS,  0,      13,     12,     140 ) \
-    PARAM_ENTRY(CAT_IOPINS,    PB2InFunc,   PINFUNCS,  0,      13,     12,     141 ) \
-    PARAM_ENTRY(CAT_IOPINS,    PB3InFunc,   PINFUNCS,  0,      13,     12,     142 ) \
-    PARAM_ENTRY(CAT_IOPINS,    GPA1Func,    APINFUNCS, 0,      2,      0,      110 ) \
-    PARAM_ENTRY(CAT_IOPINS,    GPA2Func,    APINFUNCS, 0,      2,      0,      111 ) \
-    PARAM_ENTRY(CAT_IOPINS,    ppthresh,    "dig",     0,      4095,   2500,   114 ) \
-    PARAM_ENTRY(CAT_IOPINS,    BrkVacThresh,"dig",     0,      4095,   2500,   115 ) \
-    PARAM_ENTRY(CAT_IOPINS,    BrkVacHyst,  "dig",     0,      4095,   2500,   116 ) \
-    PARAM_ENTRY(CAT_IOPINS,    DigiPot1Step,"dig",     0,      255,    0,      117 ) \
-    PARAM_ENTRY(CAT_IOPINS,    DigiPot2Step,"dig",     0,      255,    0,      118 ) \
-    PARAM_ENTRY(CAT_IOPINS,    FanTemp,     "°C",      0,      100,    40,     134 ) \
-    PARAM_ENTRY(CAT_IOPINS,    TachoPPR,    "PPR",     0,      100,    2,      136 ) \
-    PARAM_ENTRY(CAT_SHUNT,     IsaInit,     ONOFF,     0,      1,      0,      75 ) \
-    PARAM_ENTRY(CAT_PWM,       Tim3_Presc,  "",        1,      72000,  719,    100 ) \
-    PARAM_ENTRY(CAT_PWM,       Tim3_Period, "",        1,      100000, 7200,   101 ) \
-    PARAM_ENTRY(CAT_PWM,       Tim3_1_OC,   "",        1,      100000, 3600,   102 ) \
-    PARAM_ENTRY(CAT_PWM,       Tim3_2_OC,   "",        1,      100000, 3600,   103 ) \
-    PARAM_ENTRY(CAT_PWM,       Tim3_3_OC,   "",        1,      100000, 3600,   104 ) \
-    PARAM_ENTRY(CAT_PWM,       CP_PWM,      "",        1,      100,    10,     132 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  udcmin,      "V",       0,       1000,   450,    19 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  udclim,      "V",       0,       1000,   520,    20 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  idcmax,      "A",       0,       5000,   5000,   21 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  idcmin,      "A",      -5000,    0,     -5000,   22 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  tmphsmax,    "°C",      50,      150,    85,     23 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  tmpmmax,     "°C",      70,      300,    300,    24 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  throtmax,    "%",       0,       100,    100,    25 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  throtmin,    "%",      -100,     0,     -100,    26 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  throtmaxRev,    "%",    0,       100,    30,    123 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  throtdead,   "%",       0,       50,     10,     76 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  RegenBrakeLight,   "%", -100,    0,     -15,      128 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  throtrpmfilt,"rpm/10ms",0.1,     200,    15,    131 ) \
+    PARAM_ENTRY(CAT_LEXUS,     Gear,        LOWHIGH,   0,       3,      0,      27 ) \
+    PARAM_ENTRY(CAT_LEXUS,     OilPump,     "%",       0,       100,    50,     28 ) \
+    PARAM_ENTRY(CAT_CRUISE,    cruisestep,  "rpm",     1,       1000,   200,    29 ) \
+    PARAM_ENTRY(CAT_CRUISE,    cruiseramp,  "rpm/100ms",1,      1000,   20,     30 ) \
+    PARAM_ENTRY(CAT_CRUISE,    regenlevel,  "",        0,       3,      2,      31 ) \
+    PARAM_ENTRY(CAT_CONTACT,   udcsw,       "V",       0,       1000,   330,    32 ) \
+    PARAM_ENTRY(CAT_CONTACT,   cruiselight, ONOFF,     0,       1,      0,      33 ) \
+    PARAM_ENTRY(CAT_CONTACT,   errlights,   ERRLIGHTS, 0,       255,    0,      34 ) \
+    PARAM_ENTRY(CAT_COMM,      CAN3Speed,   CAN3SPD,   0,       2,      0,      77 ) \
+    PARAM_ENTRY(CAT_CHARGER,   BattCap,     "kWh",     0.1,     250,    22,     38 ) \
+    PARAM_ENTRY(CAT_CHARGER,   Voltspnt,    "V",       0,       1000,   395,    40 ) \
+    PARAM_ENTRY(CAT_CHARGER,   Pwrspnt,     "W",       0,       12000,  1500,   41 ) \
+    PARAM_ENTRY(CAT_CHARGER,   IdcTerm,     "A",       0,       150,    0,      56 ) \
+    PARAM_ENTRY(CAT_CHARGER,   CCS_ICmd,    "A",       0,       150,    0,      42 ) \
+    PARAM_ENTRY(CAT_CHARGER,   CCS_ILim,    "A",       0,       350,    100,    43 ) \
+    PARAM_ENTRY(CAT_CHARGER,   CCS_SOCLim,  "%",       0,       100,    80,     44 ) \
+    PARAM_ENTRY(CAT_CHARGER,   SOCFC,       "%",       0,       100,    50,     79 ) \
+    PARAM_ENTRY(CAT_CHARGER,   Chgctrl,     CHGCTRL,   0,       2,      0,      45 ) \
+    PARAM_ENTRY(CAT_CHARGER,   ChgAcVolt,   "Vac",     0,       250,    240,    120 ) \
+    PARAM_ENTRY(CAT_CHARGER,   ChgEff,     "%",        0,       100,    90,     121) \
+    PARAM_ENTRY(CAT_CHARGER,   ConfigFoccci,  ONOFF,   0,       1,      0,      133) \
+    PARAM_ENTRY(CAT_DCDC,      DCdc_Type,   DCDCTYPES, 0,       1,      0,      105 ) \
+    PARAM_ENTRY(CAT_DCDC,      DCSetPnt,    "V",       9,       15,     14,     106 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_Timeout,  "sec",    1,       120,    10,     91 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_VminLimit, "V",     0,       10,     3.0,    92 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_VmaxLimit, "V",     0,       10,     4.2,    93 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_TminLimit, "°C",    -100,    100,    5,      94 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_TmaxLimit, "°C",    -100,    100,    50,     95 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,       100000, 500,    139 ) \
+    PARAM_ENTRY(CAT_HEATER,    Heater,      HTTYPE,    0,       3,      0,      57 ) \
+    PARAM_ENTRY(CAT_HEATER,    Control,     HTCTRL,    0,       2,      0,      58 ) \
+    PARAM_ENTRY(CAT_HEATER,    HeatPwr,     "W",       0,       6500,   0,      59 ) \
+    PARAM_ENTRY(CAT_HEATER,    HeatPercnt,  "%",       0,       100,    0,      124 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Set_Day,     DOW,       0,       6,      0,      46 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Set_Hour,    "Hours",   0,       23,     0,      47 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Set_Min,     "Mins",    0,       59,     0,      48 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Set_Sec,     "Secs",    0,       59,     0,      49 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Chg_Hrs,     "Hours",   0,       23,     0,      50 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Chg_Min,     "Mins",    0,       59,     0,      51 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Chg_Dur,     "Mins",    0,       600,    0,      52 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Pre_Hrs,     "Hours",   0,       59,     0,      53 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Pre_Min,     "Mins",    0,       59,     0,      54 ) \
+    PARAM_ENTRY(CAT_CLOCK,     Pre_Dur,     "Mins",    0,       60,     0,      55 ) \
+    PARAM_ENTRY(CAT_IOPINS,    PumpPWM,    PumpOutType,0,       1,      0,      135 ) \
+    PARAM_ENTRY(CAT_IOPINS,    Out1Func,    PINFUNCS,  0,       18,     6,      80 ) \
+    PARAM_ENTRY(CAT_IOPINS,    Out2Func,    PINFUNCS,  0,       18,     7,      81 ) \
+    PARAM_ENTRY(CAT_IOPINS,    Out3Func,    PINFUNCS,  0,       18,     3,      82 ) \
+    PARAM_ENTRY(CAT_IOPINS,    SL1Func,     PINFUNCS,  0,       18,     0,      83 ) \
+    PARAM_ENTRY(CAT_IOPINS,    SL2Func,     PINFUNCS,  0,       18,     0,      84 ) \
+    PARAM_ENTRY(CAT_IOPINS,    SPOFunc,     PINFUNCS,  0,       18,     0,      85 ) \
+    PARAM_ENTRY(CAT_IOPINS,    PWM1Func,    PINFUNCS,  0,       21,     0,      86 ) \
+    PARAM_ENTRY(CAT_IOPINS,    PWM2Func,    PINFUNCS,  0,       21,     4,      87 ) \
+    PARAM_ENTRY(CAT_IOPINS,    PWM3Func,    PINFUNCS,  0,       21,     2,      88 ) \
+    PARAM_ENTRY(CAT_IOPINS,    GP12VInFunc, PINFUNCS,  0,       13,     12,     98 ) \
+    PARAM_ENTRY(CAT_IOPINS,    HVReqFunc,   PINFUNCS,  0,       13,     12,     99 ) \
+    PARAM_ENTRY(CAT_IOPINS,    PB1InFunc,   PINFUNCS,  0,       13,     12,     140 ) \
+    PARAM_ENTRY(CAT_IOPINS,    PB2InFunc,   PINFUNCS,  0,       13,     12,     141 ) \
+    PARAM_ENTRY(CAT_IOPINS,    PB3InFunc,   PINFUNCS,  0,       13,     12,     142 ) \
+    PARAM_ENTRY(CAT_IOPINS,    GPA1Func,    APINFUNCS, 0,       2,      0,      110 ) \
+    PARAM_ENTRY(CAT_IOPINS,    GPA2Func,    APINFUNCS, 0,       2,      0,      111 ) \
+    PARAM_ENTRY(CAT_IOPINS,    ppthresh,    "dig",     0,       4095,   2500,   114 ) \
+    PARAM_ENTRY(CAT_IOPINS,    BrkVacThresh,"dig",     0,       4095,   2500,   115 ) \
+    PARAM_ENTRY(CAT_IOPINS,    BrkVacHyst,  "dig",     0,       4095,   2500,   116 ) \
+    PARAM_ENTRY(CAT_IOPINS,    DigiPot1Step,"dig",     0,       255,    0,      117 ) \
+    PARAM_ENTRY(CAT_IOPINS,    DigiPot2Step,"dig",     0,       255,    0,      118 ) \
+    PARAM_ENTRY(CAT_IOPINS,    FanTemp,     "°C",      0,       100,    40,     134 ) \
+    PARAM_ENTRY(CAT_IOPINS,    TachoPPR,    "PPR",     0,       100,    2,      136 ) \
+    PARAM_ENTRY(CAT_SHUNT,     IsaInit,     ONOFF,     0,       1,      0,      75 ) \
+    PARAM_ENTRY(CAT_PWM,       Tim3_Presc,  "",        1,       72000,  719,    100 ) \
+    PARAM_ENTRY(CAT_PWM,       Tim3_Period, "",        1,       100000, 7200,   101 ) \
+    PARAM_ENTRY(CAT_PWM,       Tim3_1_OC,   "",        1,       100000, 3600,   102 ) \
+    PARAM_ENTRY(CAT_PWM,       Tim3_2_OC,   "",        1,       100000, 3600,   103 ) \
+    PARAM_ENTRY(CAT_PWM,       Tim3_3_OC,   "",        1,       100000, 3600,   104 ) \
+    PARAM_ENTRY(CAT_PWM,       CP_PWM,      "",        1,       100,    10,     132 ) \
     VALUE_ENTRY(version,       VERSTR,              2000 ) \
     VALUE_ENTRY(opmode,        OPMODES,             2002 ) \
     VALUE_ENTRY(chgtyp,        CHGTYPS,             2003 ) \
@@ -170,6 +172,8 @@
     VALUE_ENTRY(maxPower,      "kW",                2108 ) \
     VALUE_ENTRY(idc,           "A",                 2012 ) \
     VALUE_ENTRY(idcMotor,      "A",                 2109 ) \
+    VALUE_ENTRY(derated_idc,   "A",                 2114 ) \
+    VALUE_ENTRY(derated_regen, "A",                 2115 ) \
     VALUE_ENTRY(KWh,           "kWh",               2013 ) \
     VALUE_ENTRY(AMPh,          "Ah",                2014 ) \
     VALUE_ENTRY(SOC,           "%",                 2015 ) \
@@ -186,7 +190,8 @@
     VALUE_ENTRY(BMS_IsoMeas,   "Ohm/v",             2099 ) \
     VALUE_ENTRY(speed,         "rpm",               2016 ) \
     VALUE_ENTRY(Veh_Speed,     "kph",               2017 ) \
-    VALUE_ENTRY(torque,        "dig",               2018 ) \
+    VALUE_ENTRY(torque,        "Nm",                2018 ) \
+    VALUE_ENTRY(torqueDemand,  "Nm",                2116 ) \
     VALUE_ENTRY(pot,           "dig",               2019 ) \
     VALUE_ENTRY(pot2,          "dig",               2020 ) \
     VALUE_ENTRY(potbrake,      "dig",               2021 ) \
@@ -207,6 +212,7 @@
     VALUE_ENTRY(din_brake,     ONOFF,               2037 ) \
     VALUE_ENTRY(din_forward,   ONOFF,               2038 ) \
     VALUE_ENTRY(din_reverse,   ONOFF,               2039 ) \
+    VALUE_ENTRY(regen_brakelight,ONOFF,             2113 ) \
     VALUE_ENTRY(din_bms,       ONOFF,               2040 ) \
     VALUE_ENTRY(din_12Vgp,     ONOFF,               2071 ) \
     VALUE_ENTRY(handbrk,       ONOFF,               2041 ) \
@@ -251,8 +257,9 @@
     VALUE_ENTRY(udcheater,     "V",                 2097 ) \
     VALUE_ENTRY(powerheater,   "W",                 2098 ) \
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
+    VALUE_ENTRY(DriverDoorSt,  DMODES,              2112 ) \
 
-//Next value Id: 2112
+//Next value Id: 2117
 
 //Dead params
 /*
@@ -264,8 +271,8 @@
 #define VERSTR STRINGIFY(4=VER)
 #define PINFUNCS     "0=None, 1=ChaDeMoAlw, 2=OBCEnable, 3=HeaterEnable, 4=RunIndication, 5=WarnIndication," \
                      "6=CoolantPump, 7=NegContactor, 8=BrakeLight, 9=ReverseLight, 10=HeatReq, 11=HVRequest," \
-                     "12=DCFCRequest, 13=BrakeVacPump, 14=CoolingFan, 15=HvActive, 16=PwmTim3, 17=CpSpoof,"\
-                     "18=GS450pump"
+                     "12=DCFCRequest, 13=ChargeStop, 14=BrakeVacPump, 15=CoolingFan, 16=HvActive, 17=ParkingBrake," \
+                     "18=T15On, 19=PwmTim3, 20=CpSpoof, 21=GS450pump"
 #define APINFUNCS    "0=None, 1=ProxPilot, 2=BrakeVacSensor"
 #define SHIFTERS     "0=None, 1=BMW_F30, 2=JLR_G1, 3=JLR_G2, 4=BMW_E65"
 #define SHNTYPE      "0=None, 1=ISA, 2=SBOX, 3=VAG, 4=HVCU"
@@ -325,7 +332,7 @@
 #define CAN_PERIOD_10MS     1
 
 #define FIRST_IO_PARAM Param::Out1Func
-#define SEC_IO_PARAM Param::PB1InFunc
+#define SEC_IO_PARAM Param::HVReqFunc  // PB1InFunc
 #define FIRST_AI_PARAM Param::GPA1Func
 enum modes
 {

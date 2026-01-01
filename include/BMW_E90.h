@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2020 Johannes Huebner <dev@johanneshuebner.com>
  *               2021-2022 Damien Maguire <info@evbmw.com>
- * Yes I'm really writing software now........run.....run away.......
+ *               2025 Wim Boone <Github:Wim426F>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,6 +49,8 @@ public:
    void handle1A0(uint32_t data[2]);
    void handle2FC(uint32_t data[2]);
    void handle480(uint32_t data[2]);
+   void handleB6(uint32_t data[2]);
+   void handle3FE(uint32_t data[2]);
    void SetE90(bool e90) { isE90 = e90; }
    void Engine_Data();
    void SetFuelGauge(float level);

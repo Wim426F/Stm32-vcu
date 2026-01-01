@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug STM32 (OpenOCD)",
+            "cwd": "${workspaceFolder}",
+            "executable": "./stm32_vcu",
+            "request": "launch",
+            "type": "cortex-debug",
+            "runToEntryPoint": "Reset_Handler",
+            "servertype": "openocd",
+            "gdbPath": "arm-none-eabi-gdb.exe",
+            "armToolchainPath": "C:/Program Files (x86)/arm-gnu-toolchain/bin/",
+            "serverpath": "C:/openocd/bin/openocd.exe",
+            "configFiles": [
+                "interface/stlink.cfg",
+                "target/stm32f1x.cfg"
+            ],
+            "searchDir": ["C:/openocd/share/openocd/scripts"],
+            "serverArgs": ["-s", "C:/openocd/share/openocd/scripts"],
+            "svdFile": "${workspaceFolder}/STM32F103.svd",
+            "preLaunchTask": "Build Project",
+            "showDevDebugOutput": "parsed"
+        }
+    ]
+}

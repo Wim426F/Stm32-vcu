@@ -49,3 +49,5 @@ test_vcu
 
 # hex output - only keep for releases
 #stm32_vcu.hex
+
+Stm32-vcu-wim.code-workspace

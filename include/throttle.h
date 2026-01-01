@@ -37,6 +37,9 @@ public:
     static void IdcLimitCommand(float& finalSpnt, float idc);
     static void SpeedLimitCommand(float& finalSpnt, int speed);
     static float RampThrottle(float finalSpnt);
+    static float GetDischargeDerateFactor(float udc, float idc, float temp_hs, float temp_m, int speed);    // For idc derate instead of torque
+    static float GetRegenDerateFactor(float udc, float idc, float temp_hs, float temp_m, int speed);        // For idc derate instead of torque
+    
     static int potmin[2];
     static int potmax[2];
     static float regenRpm;

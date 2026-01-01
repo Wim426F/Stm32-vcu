@@ -1,0 +1,30 @@
+{
+    "configurations": [
+        {
+            "name": "STM32 libopencm3 (Windows)",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/libopeninv/include",
+                "${workspaceFolder}/libopencm3/include",
+                "C:/Program Files (x86)/arm-gnu-toolchain/arm-none-eabi/include"
+            ],
+            "defines": [
+                "STM32F1",
+                "DT_DEBUG=$(TERMINAL_DEBUG)"
+            ],
+            "compilerPath": "C:/Program Files (x86)/arm-gnu-toolchain/bin/arm-none-eabi-gcc.exe",
+            "cStandard": "gnu99",
+            "cppStandard": "gnu++11",
+            "intelliSenseMode": "gcc-arm",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "C:/Program Files (x86)/arm-gnu-toolchain/arm-none-eabi/include"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}

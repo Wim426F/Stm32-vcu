@@ -482,8 +482,10 @@ void i3LIMClass::Task100Ms()
     bytes[7] = 0xff;
     can->Send(0x03c, (uint32_t*)bytes,8); //average 100ms
 
-    uint16_t Wh_Local=Param::GetInt(Param::BattCap);
+    //uint16_t Wh_Local=Param::GetFloat(Param::BattCap);
+    uint16_t Wh_Local=(uint16_t)(Param::GetFloat(Param::BattCap)*1000);  // Wh or kWh? FIMXE
     CHG_Pwr=(CHG_Pwr & 0xFFF);
+    
     bytes[0] = Wh_Local & 0xFF;  //Battery Wh lowbyte
     bytes[1] = Wh_Local >> 8;  //BAttery Wh high byte
     bytes[2] = (((uint8_t)CHG_Status<<4)|((uint8_t)CHG_Req));  //charge status in bits 4-7.goes to 1 then 2.8 secs later to 2. Plug locking???. Charge request in lower nibble. 1 when charging. 0 when not charging.
@@ -879,7 +881,6 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
 
 bool i3LIMClass::ACRequest(bool RunCh)
 {
-
     if (Param::GetBool(Param::PlugDet)&&(CP_Mode==0x1||CP_Mode==0x2)&&RunCh)  //if we have an enable and a plug in and a std ac pilot lets go AC charge mode.
     {
         lim_state=20;//return to state 0
@@ -891,7 +892,7 @@ bool i3LIMClass::ACRequest(bool RunCh)
         CHG_Status=ChargeStatus::Rdy;
         CHG_Req=ChargeRequest::Charge;
         CHG_Ready=ChargeReady::Rdy;
-        CHG_Pwr=6500/25;//approx 6.5kw ac
+        CHG_Pwr=11000/25;//approx 11kw ac
         return true;
     }
     else
@@ -908,7 +909,6 @@ bool i3LIMClass::ACRequest(bool RunCh)
         CHG_Pwr=0;
 
         return false;
-
     }
 
 }

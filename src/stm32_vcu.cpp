@@ -267,7 +267,7 @@ static void Ms200Task(void)
             RunChg=false;
         }
     }
-
+    
     if(selectedCharger->ControlCharge(RunChg, ACrequest) && (opmode != MOD_RUN))
     {
         chargeMode = true;   //AC charge mode
@@ -297,18 +297,32 @@ static void Ms200Task(void)
     */
     if(opmode==MOD_CHARGE && !chargeModeDC)
     {
-        if(Param::GetInt(Param::udc)>=Param::GetInt(Param::Voltspnt) && Param::GetInt(Param::idc)<=Param::GetInt(Param::IdcTerm))
+        if(Param::GetInt(Param::udc)>=Param::GetInt(Param::Voltspnt)) //&& Param::GetInt(Param::idc)<=Param::GetInt(Param::IdcTerm)) FIXME
         {
             RunChg=false;//end charge
             ChgLck=true;//set charge lockout flag
         }
-
+        static int wait_for_bms = 20; // 20x 200ms = 10 sec wait time
         if(selectedBMS->MaxChargeCurrent()==0)//BMS can command an AC charge shutdown if its current limit is 0
         {
-            RunChg=false;//end charge
-            ChgLck=true;//set charge lockout flag
+            if (wait_for_bms > 0) wait_for_bms--; // if we dont wait we get locked out of charge before bms populates max charge current
+            else
+            {
+                RunChg=false;//end charge
+                ChgLck=true;//set charge lockout flag 
+                wait_for_bms = 10;
+            }
         }
 
+        if (IOMatrix::GetPin(IOMatrix::CHARGESTOP) != &DigIo::dummypin)
+        {
+            //push button in chargeport stops charging
+            if(IOMatrix::GetPin(IOMatrix::CHARGESTOP)->Get() && Param::GetInt(Param::VehLockSt) == 0) //dont allow chgstop button when vehicle locked
+            {
+                RunChg=false;//end charge
+                ChgLck=true;//set charge lockout flag
+            }
+        }
 
     }
     if(opmode==MOD_RUN)
@@ -402,7 +416,26 @@ static void Ms100Task(void)
         IOMatrix::GetPin(IOMatrix::REVERSELIGHT)->Clear();
     }
 
-    if(opmode==MOD_RUN)
+    //Set chime if in drive or reverse mode with door open
+    if(Param::GetInt(Param::DriverDoorSt) && Param::GetInt(Param::dir) != Park && Param::GetInt(Param::dir) != Neutral)
+    {
+        IOMatrix::GetPin(IOMatrix::WARNINDICATION)->Set();
+    }
+    else
+    {
+        IOMatrix::GetPin(IOMatrix::WARNINDICATION)->Clear();
+    }
+
+    if(Param::GetInt(Param::handbrk))
+    {
+        IOMatrix::GetPin(IOMatrix::PARKINGBRAKE)->Set();
+    }
+    else
+    {
+        IOMatrix::GetPin(IOMatrix::PARKINGBRAKE)->Clear();
+    }
+
+    if(opmode == MOD_RUN)
     {
         IOMatrix::GetPin(IOMatrix::RUNINDICATION)->Set();
     }
@@ -410,7 +443,6 @@ static void Ms100Task(void)
     {
         IOMatrix::GetPin(IOMatrix::RUNINDICATION)->Clear();
     }
-
 
     Param::SetFloat(Param::tmphs, selectedInverter->GetInverterTemperature()); //send inverter temp to web interface
     Param::SetFloat(Param::tmpm, selectedInverter->GetMotorTemperature()); //send motor temp to web interface
@@ -439,7 +471,7 @@ static void Ms100Task(void)
 
     if(!chargeModeDC)//Request to run ac charge from the interface (e.g. LIM) if we are NOT in DC charge mode.
     {
-        ACrequest=selectedChargeInt->ACRequest(RunChg);
+        ACrequest=selectedChargeInt->ACRequest(RunChg); //FIXME
     }
 
     if (IOMatrix::GetPin(IOMatrix::HEATREQ) != &DigIo::dummypin)
@@ -570,8 +602,8 @@ static void Ms10Task(void)
 
     selectedInverter->SetTorque(torquePercent);
 
-
-    if(Param::GetInt(Param::potnom) < Param::GetInt(Param::RegenBrakeLight))
+    //if(Param::GetInt(Param::potnom) < Param::GetInt(Param::RegenBrakeLight))
+    if(Param::GetInt(Param::regen_brakelight)) // set by CAN msg received from T2C/tesla drive unit
     {
         //enable Brake Light Ouput
         IOMatrix::GetPin(IOMatrix::BRAKELIGHT)->Set();
@@ -617,7 +649,8 @@ static void Ms10Task(void)
     stt |= Param::GetInt(Param::pot) <= Param::GetInt(Param::potmin) ? STAT_NONE : STAT_POTPRESSED;
     stt |= udc >= Param::GetFloat(Param::udcsw) ? STAT_NONE : STAT_UDCBELOWUDCSW;
     stt |= udc < Param::GetFloat(Param::udclim) ? STAT_NONE : STAT_UDCLIM;
-    stt |= Param::GetInt(Param::BMS_Isolation) < Param::GetInt(Param::BMS_IsoLimit) && opmode != MOD_OFF ? STAT_ISOFAULT : STAT_NONE; //gfm is only on with key so dont trigger fault when its off.
+    stt |= Param::GetFloat(Param::udc2) > Param::GetFloat(Param::udcmin) ? STAT_NONE : STAT_UDCLOW;
+    stt |= Param::GetFloat(Param::BMS_IsoMeas) > Param::GetFloat(Param::BMS_IsoLimit) ? STAT_NONE : STAT_ISOFAULT;
     Param::SetInt(Param::status, stt);
 
     switch (opmode)
@@ -638,19 +671,25 @@ static void Ms10Task(void)
             IOMatrix::GetPin(IOMatrix::NEGCONTACTOR)->Clear();//Negative contactors off if used
             DigIo::prec_out.Clear();
         }
+        if (Param::GetInt(Param::T15Stat) || chargeMode)
+            IOMatrix::GetPin(IOMatrix::T15ON)->Set();   // Enable powertrain computers
+        else
+            IOMatrix::GetPin(IOMatrix::T15ON)->Clear(); // Shutdown powertrain computers
 
-        if(Param::GetInt(Param::pot) < Param::GetInt(Param::potmin))
+        if ((stt & (STAT_POTPRESSED | STAT_UDCLOW)) == STAT_NONE)
         {
             if ((selectedVehicle->Start() && selectedVehicle->Ready()))
             {
                 StartSig=true;
-                opmode = MOD_PRECHARGE;//proceed to precharge if 1)throttle not pressed , 2)ign on , 3)start signal rx
+                //proceed to precharge if 1)throttle not pressed , 2)ign on , 3)start signal rx
+                opmode = MOD_PRECHARGE; // go to wait mode till all computers are on and faults are cleared
+                initbyStart=true;
                 rlyDly=25;//Recharge sequence timer
                 vehicleStartTime = rtc_get_counter_val();
-                initbyStart=true;
             }
         }
-        if(chargeMode)
+
+        if(chargeMode && (stt & (STAT_POTPRESSED | STAT_UDCLIM)) == STAT_NONE)
         {
             opmode = MOD_PRECHARGE;//proceed to precharge if charge requested.
             rlyDly=25;//Recharge sequence timer
@@ -658,7 +697,7 @@ static void Ms10Task(void)
             initbyCharge=true;
         }
         Param::SetInt(Param::opmode, opmode);
-        break;
+        break;                
 
     case MOD_PRECHARGE:
         if (!chargeMode)
@@ -673,22 +712,18 @@ static void Ms10Task(void)
         IOMatrix::GetPin(IOMatrix::COOLANTPUMP)->Set();
         if(rlyDly!=0) rlyDly--;//here we are going to pause before energising precharge to prevent too many contactors pulling amps at the same time
         if(rlyDly==0) DigIo::prec_out.Set();//commence precharge
-        if ((stt & (STAT_POTPRESSED | STAT_UDCBELOWUDCSW | STAT_UDCLIM | STAT_ISOFAULT)) == STAT_NONE)
+        if (StartSig && (stt & (STAT_POTPRESSED | STAT_UDCBELOWUDCSW | STAT_UDCLOW)) == STAT_NONE)
         {
-            if(StartSig)
-            {
-                opmode = MOD_RUN;
-                StartSig=false;//reset for next time
-                rlyDly=25;//Recharge sequence timer
-                Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
-            }
-            else if(chargeMode)
-            {
-                opmode = MOD_CHARGE;
-                rlyDly=25;//Recharge sequence timer
-                Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
-            }
-
+            opmode = MOD_RUN;
+            StartSig=false;//reset for next time
+            rlyDly=25;//Recharge sequence timer
+            Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
+        }
+        if(chargeMode && (stt & (STAT_POTPRESSED | STAT_UDCBELOWUDCSW | STAT_UDCLIM)) == STAT_NONE)
+        {
+            opmode = MOD_CHARGE;
+            rlyDly=500;//Recharge sequence timer  //10 seconds
+            Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
         }
         if(initbyCharge && !chargeMode) opmode = MOD_OFF;// These two statements catch a precharge hang from either start mode or run mode.
         if(initbyStart && !selectedVehicle->Ready()) opmode = MOD_OFF;
@@ -708,19 +743,20 @@ static void Ms10Task(void)
         if(initbyStart && !selectedVehicle->Ready()) opmode = MOD_OFF;//this avoids oscillation in the event of a precharge system failure
         Param::SetInt(Param::opmode, opmode);
         break;
-
+ 
     case MOD_CHARGE:
         if(rlyDly!=0) rlyDly--;//here we are going to pause before energising precharge to prevent too many contactors pulling amps at the same time
         if(rlyDly==0)
         {
             DigIo::dcsw_out.Set();
+            if(!chargeMode)
+            {
+                opmode = MOD_OFF;
+                rlyDly=250;//Recharge sequence timer for delayed shutdown
+            }
         }
         ErrorMessage::UnpostAll();
-        if(!chargeMode)
-        {
-            opmode = MOD_OFF;
-            rlyDly=250;//Recharge sequence timer for delayed shutdown
-        }
+        
         Param::SetInt(Param::opmode, opmode);
         break;
 
@@ -733,7 +769,8 @@ static void Ms10Task(void)
         }
         Param::SetInt(Param::opmode, MOD_RUN);
         ErrorMessage::UnpostAll();
-        if(!selectedVehicle->Ready())
+        // FIXME:  might also need battery current check!
+        if(!selectedVehicle->Ready() && ABS(Param::GetInt(Param::speed)) < 100) // never shutdown when driving (pm motor blows up inverter!)
         {
             opmode = MOD_OFF;
             rlyDly=250;//Recharge sequence timer for delayed shutdown

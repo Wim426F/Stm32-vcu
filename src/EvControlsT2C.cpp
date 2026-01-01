@@ -1,8 +1,7 @@
 /*
  * This file is part of the ZombieVerter project.
  *
- * Copyright (C) 2021-2022  Johannes Huebner <dev@johanneshuebner.com>
- * 	                        Damien Maguire <info@evbmw.com>
+ * Copyright (C) 2025 Wim Boone
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,13 +47,16 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
     uint8_t* bytes = (uint8_t*)data;
     switch (id)
     {
-    case 0x107: // ID264DIR_torque, renamed id from 0x108 to avoid collision with PCS control
+    case 0x107: {// ID264DIR_torque, renamed id from 0x108 to avoid collision with PCS control
         // DIR_axleSpeed: 40|16@1- (0.1,0) [-2750|2750] "RPM"
-        speed = ((int16_t)((bytes[5] << 8) | bytes[4])) * 0.9f; // Rotor RPM (axle * 9)
+        speed = ((int16_t)((bytes[6] << 8) | bytes[5])) * 0.9f; // Rotor RPM (axle * 9)
         Param::SetInt(Param::speed, speed);
-        // DIR_axleTrq: 24|16@1- (1,0) [-32768|32767] "Nm"
-        torque = (int16_t)((bytes[3] << 8) | bytes[2]);
-        Param::SetFloat(Param::torque, torque);
+        // DIR_torqueActual: 27|13@1- (2,0) [-7500|7500] "Nm"
+        uint16_t raw_torque = ((bytes[4] & 0x1F) << 8) | bytes[3]; // Extract 13 bits as unsigned
+        int16_t signed_torque = (int16_t)raw_torque;
+        if (raw_torque & 0x1000) signed_torque |= 0xE000; // Sign-extend 13-bit value to 16-bit
+        float torque = (float)signed_torque * 2.0f / 9.0f; // divide by 9 because motor has reduction of 9
+        Param::SetFloat(Param::torque, torque); }
         break;
 
     case 0x126: // ID126RearHVStatus
@@ -107,6 +109,7 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
 
         uint8_t Gear = (bytes[2] >> 5) & 0x07;    
         uint8_t regenlight = (bytes[3] >> 2) & 0x01;
+        Param::SetInt(Param::regen_brakelight, regenlight);
 
         uint8_t keepDrivePowerStateRequest = (bytes[5] >> 7) & 0x01;
         break;
@@ -153,13 +156,23 @@ void EvControlsT2C::Task100Ms()
         int opmode = Param::GetInt(Param::opmode);
         if (opmode == MOD_RUN) {
             // Power and Regen Control (ID 0x696)
-            float max_power = (float)(Param::GetInt(Param::idcmax)) * (float)(Param::GetInt(Param::udc)) / 1000.0f; // in kW, discharge limit
-            Param::SetFloat(Param::maxPower, max_power); // in kW
-            float max_regen_current = -(float)(Param::GetInt(Param::regenmax)) * (float)(Param::GetInt(Param::idcmax)) / 100.0f; // % of idcmax in amps, negate regenmax
-            float max_regen = max_regen_current * (float)(Param::GetInt(Param::udc)) / 1000.0f; // in kW, positive limit
+            //float derated_idc = Param::GetFloat(Param::derated_idc);
+            float derated_idc = Param::GetFloat(Param::idcmax);
+            float max_power = derated_idc * (float)(Param::GetInt(Param::udc)) / 1000.0f; // kW
+            Param::SetFloat(Param::maxPower, max_power);
 
-            uint16_t power_kW_x100 = (uint16_t)(max_power * 100.0f + 0.5f); // power limit in kW, factor 0.01, manual rounding
-            uint16_t regen_kW_x100 = (uint16_t)(max_regen * 100.0f + 0.5f); // regen limit in kW, factor 0.01, manual rounding
+            //float derated_regen = Param::GetFloat(Param::derated_regen);
+            float derated_regen = Param::GetFloat(Param::regenmax);
+            float max_regen_current_val = -derated_regen;  // Negative for charge direction
+            float max_regen = max_regen_current_val * (float)(Param::GetInt(Param::udc)) / 1000.0f;
+            if (Param::GetInt(Param::din_brake)) // dont mix regen with mechanical brake
+            {
+                max_regen = 0;
+            }          
+
+            // Convert to positive kW for CAN (assuming DU expects positive limits for both)
+            uint16_t power_kW_x100 = (uint16_t)(max_power * 100.0f + 0.5f);         // power limit in kW, factor 0.01, manual rounding
+            uint16_t regen_kW_x100 = (uint16_t)(ABS(max_regen) * 100.0f + 0.5f);    // regen limit in kW, factor 0.01, manual rounding
 
             uint8_t bytes[8] = 
             {

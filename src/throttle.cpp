@@ -472,3 +472,27 @@ float Throttle::AveragePos(float Pos)
 
     return PedalPosTot/PedalPosArrLen;
 }
+
+float Throttle::GetDischargeDerateFactor(float udc, float idc, float temp_hs, float temp_m, int speed) {
+    float dummy = 100.0f;  // Simulate full discharge (acceleration) request for preemptive derating
+
+    TemperatureDerate(temp_hs, Param::GetFloat(Param::tmphsmax), dummy);
+    TemperatureDerate(temp_m, Param::GetFloat(Param::tmpmmax), dummy);
+    UdcLimitCommand(dummy, udc);
+    IdcLimitCommand(dummy, idc);
+    SpeedLimitCommand(dummy, speed);
+
+    return MAX(0.0f, MIN(1.0f, dummy / 100.0f));
+}
+
+float Throttle::GetRegenDerateFactor(float udc, float idc, float temp_hs, float temp_m, int speed) {
+    float dummy = -100.0f;  // Simulate full regen (charge into battery) request for preemptive derating
+
+    TemperatureDerate(temp_hs, Param::GetFloat(Param::tmphsmax), dummy);
+    TemperatureDerate(temp_m, Param::GetFloat(Param::tmpmmax), dummy);
+    UdcLimitCommand(dummy, udc);
+    IdcLimitCommand(dummy, idc);
+    SpeedLimitCommand(dummy, speed);  // Typically minimal effect on regen, but included for consistency
+
+    return MAX(0.0f, MIN(1.0f, -dummy / 100.0f));  // Return positive factor
+}
