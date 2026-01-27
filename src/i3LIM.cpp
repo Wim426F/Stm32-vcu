@@ -59,7 +59,24 @@ enum class ChargePhase : uint8_t
     InvalidSignal = 0xF
 };
 
+enum class PilotStatus : uint8_t
+{
+    NoPilot      = 0,
+    AC_NotReady  = 1,
+    AC_Ready     = 2,
+    Error        = 3,
+    DC_NotReady  = 4,  // 5% PWM not ready
+    DC_Ready     = 5,  // 5% PWM ready
+    PilotStatic  = 6
+};
 
+enum class PlugConnection : uint8_t
+{
+    None          = 0,
+    Plugged       = 1,
+    Error         = 2,
+    InvalidSignal = 3
+};
 
 
 static uint8_t CP_Mode=0;
@@ -148,29 +165,34 @@ void i3LIMClass::handle3B4(uint32_t data[2])  //Lim data
     */
 
     uint8_t* bytes = (uint8_t*)data;// arrgghhh this converts the two 32bit array into bytes. See comments are useful:)
+    
     uint8_t CP_Amps=bytes[0];
     Param::SetInt(Param::PilotLim,CP_Amps);
+
     uint8_t PP_Amps=bytes[1];
     Param::SetInt(Param::CableLim,PP_Amps);
-    bool PP=(bytes[2]&0x1);
-    Param::SetInt(Param::PlugDet,PP);
-    CP_Mode=(bytes[4]&0x7);
 
+    //bool PP = (bytes[2] & 0x1);
+    //Param::SetInt(Param::PlugDet,PP);
+
+    uint8_t Plug_Conn = (bytes[4] >> 5) & 0x3;
+    bool plugged = (Plug_Conn == (uint8_t)PlugConnection::Plugged);
+    Param::SetInt(Param::PlugDet, plugged);
+
+    CP_Mode=(bytes[4] & 0x7);
     Param::SetInt(Param::PilotTyp,CP_Mode);
 
+    //uint8_t ChargePort_ACLimit = CP_Amps;
 
-    uint8_t ChargePort_ACLimit = CP_Amps;
+    //if(PP_Amps < CP_Amps)
+    //{
+    //    ChargePort_ACLimit = PP_Amps;
+    //}
 
-    if(PP_Amps < CP_Amps)
-    {
-        ChargePort_ACLimit = PP_Amps;
-    }
-
-    uint16_t ACpow = GetInt(Param::ChgAcVolt) * ChargePort_ACLimit; //calculate Max AC power available
-
-    ACpow = GetInt(Param::ChgEff) *0.01 *  ACpow; //Compensate for charger efficiency
-
-    Param::SetInt(Param::Pwrspnt,ACpow); //write limit to parameter
+    // Power calc now done in teslaCharger.cpp as it receives more detailed AC stats.
+    //uint16_t ACpow = GetInt(Param::ChgAcVolt) * ChargePort_ACLimit; //calculate Max AC power available
+    //ACpow = GetInt(Param::ChgEff) *0.01 *  ACpow; //Compensate for charger efficiency
+    //Param::SetInt(Param::Pwrspnt,ACpow); //write limit to parameter
 
 
     Cont_Volts=bytes[7]*2;
@@ -285,10 +307,13 @@ void i3LIMClass::Task200Ms()
 {
 
     uint8_t bytes[8];
-//Lim command 3. Used in DC mode.
-    if(CP_Mode==0x4||CP_Mode==0x5) bytes[0] = 0xFC;
-    else bytes[0] = 0xFD;
-//bytes[0] = 0xFD;// FD at standby, change to FC on 5% pilot. Change back to FD during energy transfer
+    //Lim command 3. Used in DC mode.
+    if(CP_Mode==(uint8_t)PilotStatus::DC_NotReady||CP_Mode==(uint8_t)PilotStatus::DC_Ready) 
+        bytes[0] = 0xFC;
+    else 
+        bytes[0] = 0xFD;
+
+    //bytes[0] = 0xFD;// FD at standby, change to FC on 5% pilot. Change back to FD during energy transfer
     bytes[1] = 0xFF;//these bytes are used as a timer during energy transfer but not at setup
     bytes[2] = (uint8_t)Chg_Phase<<4;  //upper nibble seems to be a mode command to the ccs station. 0 when off, 9 when in constant current phase of cycle.
     //more investigation needed here...
@@ -608,7 +633,8 @@ void i3LIMClass::Chg_Timers()
 bool i3LIMClass::DCFCRequest(bool RunCh)
 {
 
-    if (Param::GetBool(Param::PlugDet)&&(CP_Mode==0x4||CP_Mode==0x5))  //if we have an enable and a plug in and a 5% pilot lets go DC charge mode.
+    if (Param::GetBool(Param::PlugDet) && (CP_Mode==(uint8_t)PilotStatus::DC_Ready || CP_Mode==(uint8_t)PilotStatus::DC_NotReady))
+    //if we have an enable and a plug in and a 5% pilot lets go DC charge mode.  
     {
         //removed static pilot option as was causing false entry to dc mode when ac evse used.
         //will see how this manifests...
@@ -664,7 +690,7 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
             CHG_Ready=ChargeReady::NotRdy;
             CHG_Pwr=0;//0 power
             CCSI_Spnt=0;//No current
-            if(CP_Mode==0x6) lim_state=0; //Reset to state 0 if we get a static pilot
+            if(CP_Mode==(uint8_t)PilotStatus::PilotStatic) lim_state=0; //Reset to state 0 if we get a static pilot
             //if(I_avail_tmp>10 && I_avail_tmp<500) lim_stateCnt++;
 
             if(ChargeType==0x04 || ChargeType==0x28|| ChargeType==0x09) lim_stateCnt++;
@@ -881,7 +907,8 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
 
 bool i3LIMClass::ACRequest(bool RunCh)
 {
-    if (Param::GetBool(Param::PlugDet)&&(CP_Mode==0x1||CP_Mode==0x2)&&RunCh)  //if we have an enable and a plug in and a std ac pilot lets go AC charge mode.
+    //if we have an enable and a plug in and a std ac pilot lets go AC charge mode.
+    if (Param::GetBool(Param::PlugDet)&&(CP_Mode==(uint8_t)PilotStatus::AC_Ready || CP_Mode==(uint8_t)PilotStatus::AC_NotReady)&&RunCh)  
     {
         lim_state=20;//return to state 0
         Param::SetInt(Param::CCS_State,lim_state);

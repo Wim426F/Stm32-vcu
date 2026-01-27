@@ -21,13 +21,19 @@
 #include "params.h"
 #include "my_math.h"
 
-//static bool HVreq=true;
-static bool ChRun=false;
-static uint8_t counter_109 = 0;
-static uint16_t HVvolts=0;
-static uint16_t HVspnt=0;
-static uint16_t HVpwr=0;
-static uint16_t calcBMSpwr=0;
+static bool ChRun = false;
+
+static uint8_t grid_config = 0;
+static float AC_line_voltage = 0;
+static float charger_max_power = 0; // Watt
+
+enum gridConfig
+{
+   GRID_NONE = 0,
+   GRID_1PHASE,
+   GRID_3PHASE,
+   GRID_3PHASE_DELTA
+};
 
 
 void teslaCharger::SetCanInterface(CanHardware* c)
@@ -37,27 +43,56 @@ void teslaCharger::SetCanInterface(CanHardware* c)
 }
 
 void teslaCharger::DecodeCAN(int id, uint32_t data[2])
-{
+{  
    uint8_t* bytes = (uint8_t*)data;
    if (id == 0x108)
    {
-     //if(bytes[0]==0xAA) HVreq=true;
-     //if(bytes[0]==0xCC) HVreq=false;
+      // Unpack GridCFG (2 bits) and uac (10 bits) from bytes[0] and bytes[1]
+      // AC voltage bits 0-7 in byte[0]
+      // AC voltage bits 8-9 in byte[1] 0-1
+      AC_line_voltage = (float)(bytes[0] | ((bytes[1] & 0x03) << 8));   
+      Param::SetInt(Param::ChgAcVolt, (int)AC_line_voltage);
+      grid_config = (bytes[1] >> 2) & 0x03;  // grid_config 2 bits in byte[1] bits 2-3
+
+      charger_max_power = bytes[2] * 100.0f; // 0.1 kW to Watt
    }
 }
 
 void teslaCharger::Task100Ms()
 {
+   if (Param::GetInt(Param::opmode) == MOD_OFF) return;
+   
    uint8_t bytes[8];
-   HVvolts = Param::GetInt(Param::udc);
-   HVspnt = Param::GetInt(Param::Voltspnt);
-   HVpwr = Param::GetInt(Param::Pwrspnt);
-   calcBMSpwr = (HVvolts * Param::GetInt(Param::BMS_ChargeLim));
-   HVpwr = MIN(HVpwr, calcBMSpwr);
-   // Get EVSE current limit: minimum of PilotLim and CableLim, capped at 16A
-   uint8_t currentLimit = MIN(Param::GetInt(Param::PilotLim), Param::GetInt(Param::CableLim));
-   currentLimit = MIN(currentLimit, 16); // Cap at 16A
-   currentLimit = (currentLimit > 0) ? currentLimit - 1 : 0; // Map 1–16A to 0–15 for 4-bit field
+   
+   int HVvolts = Param::GetInt(Param::udc);
+   int HVspnt = Param::GetInt(Param::Voltspnt);
+   
+   // Calculate BMS maximum power (W)
+   float bms_max_power = (float)HVvolts * Param::GetFloat(Param::BMS_ChargeLim);
+   
+   // Get EVSE current limit: minimum of PilotLim and CableLim
+   int evse_max_current = MIN(Param::GetInt(Param::PilotLim), Param::GetInt(Param::CableLim));
+   // current limit for CAN message (map 1-16A to 0-15)
+   int currentLimitCapped = MIN(evse_max_current, 16);
+   uint8_t currentLimit = (currentLimitCapped > 0) ? (currentLimitCapped - 1) : 0;
+   
+   // Calculate EVSE maximum power based on grid configuration (W)
+   int num_phases = (grid_config == GRID_3PHASE || grid_config == GRID_3PHASE_DELTA) ? 3 : 1;
+   float evse_max_power = AC_line_voltage * (float)num_phases * (float)evse_max_current;
+   
+   // Get user power limit (W)
+   float vcu_userlimit = Param::GetFloat(Param::Pwrspnt);
+   
+   // Take minimum of all limits
+   float final_setpoint = MIN(bms_max_power, evse_max_power);
+   final_setpoint = MIN(final_setpoint, charger_max_power);
+   final_setpoint = MIN(final_setpoint, vcu_userlimit);
+   
+   // Apply efficiency factor
+   //final_setpoint *= Param::GetFloat(Param::ChgEff) / 100.0f;
+   
+   int HVpwr = (int)final_setpoint;
+
    bytes[0] = Param::GetInt(Param::opmode);
    bytes[1] = (HVvolts & 0xFF);
    bytes[2] = ((HVvolts & 0xFF00) >> 8);
@@ -71,8 +106,7 @@ void teslaCharger::Task100Ms()
 
 bool teslaCharger::ControlCharge(bool RunCh, bool ACReq)
 {
-   bool dummy = RunCh;
+   (void)RunCh;
    ChRun = ACReq;
-   if(ACReq) return true;
-   else return false;
+   return ACReq;
 }

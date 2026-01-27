@@ -82,8 +82,8 @@ void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
             maxCellV = ((data[6] | (data[7] << 8)) / 10.0f); // CVHigh
             break;
          case 0x04: // Thermistor Summary
-            minTempC = (int8_t)data[2] * 0.1f; // TMin
-            maxTempC = (int8_t)data[3] * 0.1f; // TMax
+            minTempC = data[2]; // TMin
+            maxTempC = data[3]; // TMax
             break;
          case 0x05: // SOC Summary
             SOC = data[1] * 1.0f; // SOC
@@ -131,8 +131,8 @@ void DilithiumMCU::Task100Ms()
    {
       Param::SetFloat(Param::BMS_Vmin, minCellV);
       Param::SetFloat(Param::BMS_Vmax, maxCellV);
-      Param::SetFloat(Param::BMS_Tmin, minTempC);
-      Param::SetFloat(Param::BMS_Tmax, maxTempC);
+      Param::SetInt(Param::BMS_Tmin, minTempC);
+      Param::SetInt(Param::BMS_Tmax, maxTempC);
       Param::SetFloat(Param::udc2, battVoltage); // udc2 is battery voltage, udc is bus voltage
       Param::SetFloat(Param::udcsw, battVoltage - 15); //Set for precharging based on actual voltage
       Param::SetFloat(Param::deltaV, deltaV);
@@ -150,8 +150,8 @@ void DilithiumMCU::Task100Ms()
 
       Param::SetFloat(Param::BMS_Vmin, 0);
       Param::SetFloat(Param::BMS_Vmax, 0);
-      Param::SetFloat(Param::BMS_Tmin, 0);
-      Param::SetFloat(Param::BMS_Tmax, 0);
+      Param::SetInt(Param::BMS_Tmin, 0);
+      Param::SetInt(Param::BMS_Tmax, 0);
       Param::SetFloat(Param::udc2, 0);
       Param::SetFloat(Param::udcsw, Param::GetFloat(Param::udcmin)); // not 0 otherwise precharge may succeed at 0v
       Param::SetFloat(Param::deltaV, 0);

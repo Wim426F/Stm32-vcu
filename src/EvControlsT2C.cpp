@@ -165,10 +165,10 @@ void EvControlsT2C::Task100Ms()
             float derated_regen = Param::GetFloat(Param::regenmax);
             float max_regen_current_val = -derated_regen;  // Negative for charge direction
             float max_regen = max_regen_current_val * (float)(Param::GetInt(Param::udc)) / 1000.0f;
-            if (Param::GetInt(Param::din_brake)) // dont mix regen with mechanical brake
+            if (Param::GetBool(Param::din_brake)) // dont mix regen with mechanical brake
             {
                 max_regen = 0;
-            }          
+            }
 
             // Convert to positive kW for CAN (assuming DU expects positive limits for both)
             uint16_t power_kW_x100 = (uint16_t)(max_power * 100.0f + 0.5f);         // power limit in kW, factor 0.01, manual rounding

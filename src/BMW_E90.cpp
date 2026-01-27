@@ -151,7 +151,8 @@ void BMW_E90::handle1A0(uint32_t data[2])
     uint8_t* bytes = (uint8_t*)data;
 
     float kph = (bytes[0] + uint16_t((bytes[1]&0x0F)<<8)) * 0.1;
-    Param::SetFloat(Param::Veh_Speed, kph * 0.621371f);
+    //Param::SetFloat(Param::Veh_Speed, kph * 0.621371f);
+    Param::SetFloat(Param::Veh_Speed, kph);
 }
 
 void BMW_E90::handle2FC(uint32_t data[2])
@@ -457,7 +458,7 @@ void BMW_E90::Engine_Data()
 
         float power_kW = Param::GetFloat(Param::power);  // Power in kW (negative=discharge, positive=regen)
 
-        const float interval_s = 0.2f;
+        const float interval_s = 0.1f;
         float interval_hours = interval_s / 3600.0f;
         float delta_kWh = 0.0f;
         if (power_kW < 0.0f) {  // Only add consumption during discharge

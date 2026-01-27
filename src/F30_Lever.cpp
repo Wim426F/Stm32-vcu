@@ -325,7 +325,7 @@ void F30_Lever::sendcan() {
 
     vcuDir=Param::GetInt(Param::dir);
     opmodeSh = Param::GetInt(Param::opmode);
-    if(opmodeSh==MOD_OFF) this->gear = NEUTRAL;
+    if(opmodeSh==MOD_OFF) this->gear = PARK;
  }
 
  bool F30_Lever::GetGear(Shifter::Sgear& outGear)

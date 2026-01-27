@@ -603,7 +603,7 @@ static void Ms10Task(void)
     selectedInverter->SetTorque(torquePercent);
 
     //if(Param::GetInt(Param::potnom) < Param::GetInt(Param::RegenBrakeLight))
-    if(Param::GetInt(Param::regen_brakelight)) // set by CAN msg received from T2C/tesla drive unit
+    if(Param::GetBool(Param::regen_brakelight) && !Param::GetBool(Param::din_brake)) // set by CAN msg received from T2C/tesla drive unit
     {
         //enable Brake Light Ouput
         IOMatrix::GetPin(IOMatrix::BRAKELIGHT)->Set();
@@ -660,7 +660,7 @@ static void Ms10Task(void)
         initbyCharge=false;
         DigIo::inv_out.Clear();//inverter power off
         IOMatrix::GetPin(IOMatrix::COOLANTPUMP)->Clear();//Coolant pump off if used
-        Param::SetInt(Param::dir, 0); // shift to park/neutral on shutdown regardless of shifter pos
+        Param::SetInt(Param::dir, 2); // shift to park/neutral on shutdown regardless of shifter pos
         selectedVehicle->DashOff();
         StartSig=false;//reset for next time
 

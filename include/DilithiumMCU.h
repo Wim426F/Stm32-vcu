@@ -39,8 +39,8 @@ class DilithiumMCU: public BMS
       int timeoutCounterGFM = 0;
       float minCellV = 0;
       float maxCellV = 0;
-      float minTempC = 0;
-      float maxTempC = 0;
+      int8_t minTempC = 0;
+      int8_t maxTempC = 0;
       float battVoltage = 0; // udc2 is battery voltage, udc is bus voltage
       float deltaV = 0;
       float power = 0;

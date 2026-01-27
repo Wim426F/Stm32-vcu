@@ -365,6 +365,9 @@ void Throttle::UdcLimitCommand(float& finalSpnt, float udc)
 
     uint16_t DerateReason = Param::GetInt(Param::TorqDerate);
 
+    // Clear both UDC-related bits first, then set if needed
+    DerateReason &= ~(1 | 2);
+
     if(udcmin>0)    //ignore if set to zero. useful for bench testing without isa shunt
     {
         if (finalSpnt >= 0) //if we are requesting torque
@@ -375,7 +378,6 @@ void Throttle::UdcLimitCommand(float& finalSpnt, float udc)
             if(finalSpnt > UDCres) //derate on udcmin
             {
                 DerateReason |= 1;
-                Param::SetInt(Param::TorqDerate,DerateReason);
             }
             finalSpnt = MIN(finalSpnt, UDCres);
         }
@@ -387,16 +389,13 @@ void Throttle::UdcLimitCommand(float& finalSpnt, float udc)
             if(finalSpnt < UDCres)//derate on udcmax
             {
                 DerateReason |= 2;
-                Param::SetInt(Param::TorqDerate,DerateReason);
             }
             finalSpnt = MAX(finalSpnt, UDCres);
 
         }
     }
-    else
-    {
-        finalSpnt = finalSpnt;
-    }
+
+    Param::SetInt(Param::TorqDerate, DerateReason);
 }
 
 void Throttle::IdcLimitCommand(float& finalSpnt, float idc)
@@ -409,6 +408,9 @@ void Throttle::IdcLimitCommand(float& finalSpnt, float idc)
 
     uint16_t DerateReason = Param::GetInt(Param::TorqDerate);
 
+    // Clear IDC-related bits (4 and 8)
+    DerateReason &= ~(4 | 8);
+
     if(idcmax>0)    //ignore if set to zero. useful for bench testing without isa shunt
     {
         if (finalSpnt >= 0)
@@ -419,7 +421,6 @@ void Throttle::IdcLimitCommand(float& finalSpnt, float idc)
             if(finalSpnt > IDCres)//derate on idcmax
             {
                 DerateReason |= 8;
-                Param::SetInt(Param::TorqDerate,DerateReason);
             }
             finalSpnt = MIN(finalSpnt, IDCres);
         }
@@ -432,15 +433,12 @@ void Throttle::IdcLimitCommand(float& finalSpnt, float idc)
             if(finalSpnt < IDCres)//derate on idcmin
             {
                 DerateReason |= 4;
-                Param::SetInt(Param::TorqDerate,DerateReason);
             }
             finalSpnt = MAX(finalSpnt, IDCres);
         }
     }
-    else
-    {
-        finalSpnt = finalSpnt;
-    }
+    
+    Param::SetInt(Param::TorqDerate, DerateReason);
 }
 
 void Throttle::SpeedLimitCommand(float& finalSpnt, int speed)
