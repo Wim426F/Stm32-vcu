@@ -267,6 +267,8 @@ void i3LIMClass::handle272(uint32_t data[2])  //Lim data. CCS contactor state an
 
 void i3LIMClass::Task10Ms()
 {
+    if (Param::GetInt(Param::opmode) == MOD_OFF) return;
+    
     uint16_t V_Batt=Param::GetInt(Param::udc)*10;
     uint8_t V_Batt2=(Param::GetInt(Param::udc))/4;
     int32_t I_Batt=(Param::GetInt(Param::idc)+819)*10;//(Param::GetInt(Param::idc);FP_FROMINT
@@ -305,6 +307,7 @@ void i3LIMClass::Task10Ms()
 
 void i3LIMClass::Task200Ms()
 {
+    if (Param::GetInt(Param::opmode) == MOD_OFF) return;
 
     uint8_t bytes[8];
     //Lim command 3. Used in DC mode.
@@ -496,6 +499,8 @@ void i3LIMClass::Task200Ms()
 
 void i3LIMClass::Task100Ms()
 {
+    if (Param::GetInt(Param::opmode) == MOD_OFF) return;
+
     uint8_t bytes[8];
     bytes[0] = 0xff;//vehicle status msg
     bytes[1] = 0x5f;
@@ -919,9 +924,9 @@ bool i3LIMClass::ACRequest(bool RunCh)
         CHG_Status=ChargeStatus::Rdy;
         CHG_Req=ChargeRequest::Charge;
         CHG_Ready=ChargeReady::Rdy;
-        CHG_Pwr=11000/25;//approx 11kw ac
+        CHG_Pwr=(uint32_t)(Param::GetFloat(Param::chgPsetp)/25.0f);//approx 11kw ac
         return true;
-    }
+    } 
     else
     {
         lim_state=30;//return to state 0

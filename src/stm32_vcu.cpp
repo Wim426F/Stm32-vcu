@@ -653,6 +653,8 @@ static void Ms10Task(void)
     stt |= Param::GetFloat(Param::BMS_IsoMeas) > Param::GetFloat(Param::BMS_IsoLimit) ? STAT_NONE : STAT_ISOFAULT;
     Param::SetInt(Param::status, stt);
 
+    int safety_override = Param::GetInt(Param::SafetyOverride);
+
     switch (opmode)
     {
     case MOD_OFF:
@@ -676,13 +678,15 @@ static void Ms10Task(void)
         else
             IOMatrix::GetPin(IOMatrix::T15ON)->Clear(); // Shutdown powertrain computers
 
-        if ((stt & (STAT_POTPRESSED | STAT_UDCLOW)) == STAT_NONE)
+        
+        if (((stt & (STAT_POTPRESSED | STAT_UDCLOW)) == STAT_NONE) || safety_override)
         {
             if ((selectedVehicle->Start() && selectedVehicle->Ready()))
             {
+                IOMatrix::GetPin(IOMatrix::T15ON)->Set();   // Enable powertrain computers
                 StartSig=true;
                 //proceed to precharge if 1)throttle not pressed , 2)ign on , 3)start signal rx
-                opmode = MOD_PRECHARGE; // go to wait mode till all computers are on and faults are cleared
+                opmode = MOD_PRECHARGE;
                 initbyStart=true;
                 rlyDly=25;//Recharge sequence timer
                 vehicleStartTime = rtc_get_counter_val();
@@ -729,9 +733,18 @@ static void Ms10Task(void)
         if(initbyStart && !selectedVehicle->Ready()) opmode = MOD_OFF;
         if (opmode == MOD_PRECHARGE && rtc_get_counter_val() > (vehicleStartTime + Param::GetInt(Param::PrechargeTimeout)))
         {
-            DigIo::prec_out.Clear();
-            ErrorMessage::Post(ERR_PRECHARGE);
-            opmode = MOD_PCHFAIL;
+            if (safety_override && initbyStart)
+            {
+                opmode = MOD_RUN;
+                StartSig=false;//reset for next time
+                rlyDly=25;//Recharge sequence timer
+            }
+            else
+            {
+                DigIo::prec_out.Clear();
+                ErrorMessage::Post(ERR_PRECHARGE);
+                opmode = MOD_PCHFAIL;
+            }  
         }
         Param::SetInt(Param::opmode, opmode);
         break;

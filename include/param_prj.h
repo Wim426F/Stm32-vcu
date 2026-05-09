@@ -52,7 +52,8 @@
     PARAM_ENTRY(CAT_SETUP,     CanTimeout,  "sec",     0,       120,    10,     143 ) \
     PARAM_ENTRY(CAT_SETUP,     InvTimeout,  "sec",     0,       120,    1,      144 ) \
     PARAM_ENTRY(CAT_SETUP,     PrechargeTimeout,"sec", 1,       10,     2,      145 ) \
-    PARAM_ENTRY(CAT_SETUP,     FuelCap,     "Liters",  1,       200,    63,     148 ) \
+    PARAM_ENTRY(CAT_SETUP,     FuelCap,     "Liters",  1,       1024,    63,     148 ) \
+    PARAM_ENTRY(CAT_SETUP,     SafetyOverride, ONOFF,  0,       1,      0,      149 ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmin,      "dig",     0,       4095,   0,      7  ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmax,      "dig",     0,       4095,   4095,   8  ) \
     PARAM_ENTRY(CAT_THROTTLE,  pot2min,     "dig",     0,       4095,   4095,   9  ) \
@@ -170,6 +171,7 @@
     VALUE_ENTRY(power,         "kW",                2011 ) \
     VALUE_ENTRY(motorPower,    "kW",                2110 ) \
     VALUE_ENTRY(maxPower,      "kW",                2108 ) \
+    VALUE_ENTRY(chgPsetp,      "kW",                2117 ) \
     VALUE_ENTRY(idc,           "A",                 2012 ) \
     VALUE_ENTRY(idcMotor,      "A",                 2109 ) \
     VALUE_ENTRY(derated_idc,   "A",                 2114 ) \

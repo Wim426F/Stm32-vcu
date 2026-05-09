@@ -93,6 +93,8 @@ void teslaCharger::Task100Ms()
    
    int HVpwr = (int)final_setpoint;
 
+   Param::SetFloat(Param::chgPsetp, final_setpoint/1000.0f); // kW
+
    bytes[0] = Param::GetInt(Param::opmode);
    bytes[1] = (HVvolts & 0xFF);
    bytes[2] = ((HVvolts & 0xFF00) >> 8);

@@ -31,6 +31,7 @@
 
 // Const int for target RPM (e.g., 750 rpm idle)
 const int TARGET_IDLE_RPM = 750;
+const int FUEL_CAPACITY = 63;
 
 static uint8_t  Gcount; //gear display counter byte
 static uint8_t shiftPos=0xe1; //contains byte to display gear position on dash.default to park
@@ -453,7 +454,7 @@ void BMW_E90::Engine_Data()
 
         // Fuel emulation based on power consumption
         float full_kWh = Param::GetFloat(Param::BattCap);  // Full battery kWh
-        float tank_L = Param::GetFloat(Param::FuelCap);    // Tank liters
+        float tank_L = FUEL_CAPACITY;    // Tank liters
         float f_kWh_per_L = (tank_L > 0.0f) ? full_kWh / tank_L : 1.0f;  // Avoid div0
 
         float power_kW = Param::GetFloat(Param::power);  // Power in kW (negative=discharge, positive=regen)
@@ -515,41 +516,36 @@ void BMW_E90::Engine_Data()
 
 void BMW_E90::SetFuelGauge(float level)
 {
-    int pot1 = 0;
-    int pot2 = 0;
-    const int fuelGaugeMap[20][3] =  // SOC, pot1, pot2
+    // SOC% to MCP4251 byte value, measured on E90 cluster (R87 = 100Ω)
+    static const int fuelGaugeMap[8][2] =
     {
-        { 5, 1, 0 },
-        { 10, 1, 1 },
-        { 15, 2, 1 },
-        { 20, 2, 2 },
-        { 25, 3, 2 },
-        { 30, 4, 3 },
-        { 35, 4, 4 },
-        { 40, 5, 4 },
-        { 45, 5, 5 },
-        { 50, 6, 6 },
-        { 55, 7, 6 },
-        { 60, 8, 7 },
-        { 65, 8, 8 },
-        { 70, 9, 9 },
-        { 75, 10, 10 },
-        { 80, 11, 11 },
-        { 85, 12, 12 },
-        { 90, 14, 14 },
-        { 95, 17, 16 },
-        { 100, 19, 19 }
+        {   0, 255 },
+        {   2, 255 },
+        {   5, 250 },
+        {  10, 245 },
+        {  25, 227 },
+        {  50, 194 },
+        {  75, 158 },
+        { 100,  95 },
     };
 
-    for(int i = 0; i < 20; i++)
+    int byteValue = fuelGaugeMap[0][1];
+
+    // Find which segment level falls in and linearly interpolate
+    for (int i = 0; i < 7; i++)
     {
-        if (level >= fuelGaugeMap[i][0])
+        float socLo = fuelGaugeMap[i][0];
+        float socHi = fuelGaugeMap[i+1][0];
+        if (level >= socLo && level <= socHi)
         {
-            pot1 = fuelGaugeMap[i][1];
-            pot2 = fuelGaugeMap[i][2];
+            float byteLo = fuelGaugeMap[i][1];
+            float byteHi = fuelGaugeMap[i+1][1];
+            float t = (level - socLo) / (socHi - socLo); // position within segment, 0..1
+            byteValue = (int)(byteLo + t * (byteHi - byteLo) + 0.5f); // +0.5 rounds to nearest
+            break;
         }
     }
 
-    Param::SetInt(Param::DigiPot1Step, pot1);
-    Param::SetInt(Param::DigiPot2Step, pot2);
+    Param::SetInt(Param::DigiPot1Step, byteValue);
+    Param::SetInt(Param::DigiPot2Step, byteValue);
 }
