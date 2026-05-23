@@ -38,21 +38,20 @@
     PARAM_ENTRY(CAT_SETUP,     chargemodes,  CHGMODS,   0,      6,      0,      37 ) \
     PARAM_ENTRY(CAT_SETUP,     BMS_Mode,    BMSMODES,  0,       6,      0,      90 ) \
     PARAM_ENTRY(CAT_SETUP,     ShuntType,   SHNTYPE,   0,       4,      0,      147 ) \
-    PARAM_ENTRY(CAT_SETUP,     InverterCan,  CAN_DEV,  0,       1,      0,      70 ) \
-    PARAM_ENTRY(CAT_SETUP,     VehicleCan,   CAN_DEV,  0,       1,      1,      71 ) \
-    PARAM_ENTRY(CAT_SETUP,     ShuntCan,     CAN_DEV,  0,       1,      0,      72 ) \
-    PARAM_ENTRY(CAT_SETUP,     LimCan,       CAN_DEV,  0,       1,      0,      73 ) \
-    PARAM_ENTRY(CAT_SETUP,     ChargerCan,   CAN_DEV,  0,       1,      1,      74 ) \
-    PARAM_ENTRY(CAT_SETUP,     BMSCan,       CAN_DEV,  0,       1,      1,      89 ) \
-    PARAM_ENTRY(CAT_SETUP,     OBD2Can,      CAN_DEV,  0,       1,      0,      96 ) \
+    PARAM_ENTRY(CAT_SETUP,     InverterCan,  CAN_DEV,  0,       3,      0,      70 ) \
+    PARAM_ENTRY(CAT_SETUP,     VehicleCan,   CAN_DEV,  0,       3,      1,      71 ) \
+    PARAM_ENTRY(CAT_SETUP,     ShuntCan,     CAN_DEV,  0,       3,      0,      72 ) \
+    PARAM_ENTRY(CAT_SETUP,     LimCan,       CAN_DEV,  0,       3,      0,      73 ) \
+    PARAM_ENTRY(CAT_SETUP,     ChargerCan,   CAN_DEV,  0,       3,      1,      74 ) \
+    PARAM_ENTRY(CAT_SETUP,     BMSCan,       CAN_DEV,  0,       3,      1,      89 ) \
+    PARAM_ENTRY(CAT_SETUP,     OBD2Can,      CAN_DEV,  0,       3,      0,      96 ) \
     PARAM_ENTRY(CAT_SETUP,     CanMapCan,    CAN_DEV,  0,       1,      0,      97 ) \
-    PARAM_ENTRY(CAT_SETUP,     DCDCCan,      CAN_DEV,  0,       1,      1,      107 ) \
-    PARAM_ENTRY(CAT_SETUP,     HeaterCan,    CAN_DEV,  0,       1,      1,      138 ) \
+    PARAM_ENTRY(CAT_SETUP,     DCDCCan,      CAN_DEV,  0,       3,      1,      107 ) \
+    PARAM_ENTRY(CAT_SETUP,     HeaterCan,    CAN_DEV,  0,       3,      1,      138 ) \
     PARAM_ENTRY(CAT_SETUP,     MotActive,    MotorsAct,0,       3,      0,      129 ) \
     PARAM_ENTRY(CAT_SETUP,     CanTimeout,  "sec",     0,       120,    10,     143 ) \
     PARAM_ENTRY(CAT_SETUP,     InvTimeout,  "sec",     0,       120,    1,      144 ) \
     PARAM_ENTRY(CAT_SETUP,     PrechargeTimeout,"sec", 1,       10,     2,      145 ) \
-    PARAM_ENTRY(CAT_SETUP,     FuelCap,     "Liters",  1,       1024,    63,     148 ) \
     PARAM_ENTRY(CAT_SETUP,     SafetyOverride, ONOFF,  0,       1,      0,      149 ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmin,      "dig",     0,       4095,   0,      7  ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmax,      "dig",     0,       4095,   4095,   8  ) \
@@ -90,7 +89,8 @@
     PARAM_ENTRY(CAT_CONTACT,   udcsw,       "V",       0,       1000,   330,    32 ) \
     PARAM_ENTRY(CAT_CONTACT,   cruiselight, ONOFF,     0,       1,      0,      33 ) \
     PARAM_ENTRY(CAT_CONTACT,   errlights,   ERRLIGHTS, 0,       255,    0,      34 ) \
-    PARAM_ENTRY(CAT_COMM,      CAN3Speed,   CAN3SPD,   0,       2,      0,      77 ) \
+    PARAM_ENTRY(CAT_COMM,      CAN3Speed,   CAN3SPD,   0,       1,      0,      77 ) \
+    PARAM_ENTRY(CAT_COMM,      CAN4Speed,   CAN4SPD,   0,       0,      0,      150 ) \
     PARAM_ENTRY(CAT_CHARGER,   BattCap,     "kWh",     0.1,     250,    22,     38 ) \
     PARAM_ENTRY(CAT_CHARGER,   Voltspnt,    "V",       0,       1000,   395,    40 ) \
     PARAM_ENTRY(CAT_CHARGER,   Pwrspnt,     "W",       0,       12000,  1500,   41 ) \
@@ -307,9 +307,10 @@
 #define CHGMODS      "0=Off, 1=EXT_DIGI, 2=Volt_Ampera, 3=Leaf_PDM, 4=TeslaOI, 5=Out_lander, 6=Elcon"
 #define CHGCTRL      "0=Enable, 1=Disable, 2=Timer"
 #define CHGINT       "0=Unused, 1=i3LIM, 2=Chademo, 3=CPC, 4=Foccci"
-#define CAN3SPD      "0=k33.3, 1=k500, 2=k100"
+#define CAN3SPD      "0=k33.3, 1=k500"
+#define CAN4SPD      "0=k500"
 #define TRNMODES     "0=Manual, 1=Auto"
-#define CAN_DEV      "0=CAN1, 1=CAN2"
+#define CAN_DEV      "0=CAN1, 1=CAN2, 2=CAN3, 3=CAN4"
 #define CAT_THROTTLE "Throttle"
 #define CAT_POWER    "Power Limit"
 #define CAT_CONTACT  "Contactor Control"

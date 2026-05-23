@@ -25,7 +25,7 @@
 #include <stdint.h>
 #include "my_math.h"
 #include "my_fp.h"
-#include "CANSPI.h"
+#include "canhardware.h"
 #include "digio.h"
 #include "utils.h"
 

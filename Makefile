@@ -29,10 +29,10 @@ OBJDUMP		= $(PREFIX)-objdump
 MKDIR_P     = mkdir -p
 TERMINAL_DEBUG ?= 0
 CFLAGS		= -Os -Wall -Wextra -Ilibopeninv/include -Iinclude/ -Ilibopencm3/include -Iinclude/vehicles -Iinclude/chargers -Iinclude/inverters\
-              -Iinclude/heaters -Iinclude/bms -Iinclude/shifter -fno-common -fno-builtin -pedantic -DSTM32F1 -DMAX_USER_MESSAGES=30 \
+              -Iinclude/heaters -Iinclude/bms -Iinclude/shifter -fno-common -fno-builtin -pedantic -DSTM32F1 -DMAX_USER_MESSAGES=64 -DMAX_RECV_CALLBACKS=32 \
 				 -Iinclude/charge_interface -Iinclude/dcdc -mcpu=cortex-m3 -mthumb -std=gnu99 -ffunction-sections -fdata-sections -ggdb3
 CPPFLAGS    = -Os -Wall -Wextra -Ilibopeninv/include -Iinclude/ -Ilibopencm3/include -Iinclude/vehicles -Iinclude/chargers -Iinclude/inverters\
-              -Iinclude/heaters -Iinclude/bms -Iinclude/shifter -fno-common -std=c++17 -pedantic -DSTM32F1 -DMAX_USER_MESSAGES=30  \
+              -Iinclude/heaters -Iinclude/bms -Iinclude/shifter -fno-common -std=c++17 -pedantic -DSTM32F1 -DMAX_USER_MESSAGES=64 -DMAX_RECV_CALLBACKS=32 \
 				 -Iinclude/charge_interface -Iinclude/dcdc -ffunction-sections -fdata-sections -fno-builtin -fno-rtti -fno-exceptions \
               -fno-unwind-tables -mcpu=cortex-m3 -mthumb -ggdb3
 LDSCRIPT	= $(BINARY).ld
@@ -45,7 +45,7 @@ OBJSL		= $(BINARY).o hwinit.o stm32scheduler.o params.o terminal.o terminal_prj.
            daisychainbms.o simpbms.o outlanderCharger.o Can_OBD2.o cansdo.o TeslaDCDC.o BMW_E31.o F30_Lever.o \
            CPC.o ElconCharger.o RearOutlanderinverter.o linbus.o VWheater.o JLR_G1.o JLR_G2.o Foccci.o digipot.o\
 		   OutlanderHeartBeat.o E65_Lever.o leafbms.o V_Classic.o kangoobms.o OutlanderCanHeater.o NissLeafMng.o \
-		   DilithiumMCU.o EvControlsT2C.o hvcu_box.o
+		   DilithiumMCU.o EvControlsT2C.o hvcu_box.o sdocommands.o mcp25625can.o mcp2518fd.o mcp251863can.o
            
 OBJS     = $(patsubst %.o,$(OUT_DIR)/%.o, $(OBJSL))
 vpath %.c src/ libopeninv/src/ src/vehicles/ src/chargers/ src/inverters/ src/heaters/ src/bms/ src/shifter/ src/charge_interface/ src/dcdc/

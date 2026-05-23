@@ -79,11 +79,9 @@ return tmp;
 */
 
 #include "amperaheater.h"
-#include "CANSPI.h"
 #include "digio.h"
 #include "utils.h"
 
-static uCAN_MSG txMessage_Ampera;
 static uint8_t ampera_msg_cnt=0;
 
 AmperaHeater::AmperaHeater()
@@ -93,10 +91,8 @@ AmperaHeater::AmperaHeater()
 
 void AmperaHeater::SetPower(uint16_t power, bool heatReq)
 {
-   if(power==0) isAwake = false;//if we are disabled do nothing but set isAwake to false for next wakeup ...
-   else//otherwise do everything
-   {
-
+   if (power == 0) { isAwake = false; return; }
+   if (can == nullptr) return;
 
    if (!isAwake)
    {
@@ -104,123 +100,56 @@ void AmperaHeater::SetPower(uint16_t power, bool heatReq)
       isAwake = true;
    }
 
-   switch(ampera_msg_cnt)
+   uint8_t data[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+
+   switch (ampera_msg_cnt)
    {
    case 0:
       DigIo::sw_mode0.Set();
       DigIo::sw_mode1.Set();  // set normal mode
-      //0x621,False,1,8,0,40,0,0,0,0,0,0
-      //keep alive msg
-      txMessage_Ampera.frame.idType = dSTANDARD_CAN_MSG_ID_2_0B;
-      txMessage_Ampera.frame.id = 0x621;
-      txMessage_Ampera.frame.dlc = 8;
-      txMessage_Ampera.frame.data0 = 0x00;
-      txMessage_Ampera.frame.data1 = 0x40;
-      txMessage_Ampera.frame.data2 = 0x00;
-      txMessage_Ampera.frame.data3 = 0x00;
-      txMessage_Ampera.frame.data4 = 0x00;
-      txMessage_Ampera.frame.data5 = 0x00;
-      txMessage_Ampera.frame.data6 = 0x00;
-      txMessage_Ampera.frame.data7 = 0x00;
-      CANSPI_Transmit(&txMessage_Ampera);
-      ampera_msg_cnt++;
+      // 0x621 keep-alive
+      data[1] = 0x40;
+      can->Send(0x621, data, 8);
       break;
    case 1:
-      //0x13FFE060, True,  0, 00,00,00,00,00,00,00,00 - cmd1
-      txMessage_Ampera.frame.idType = dEXTENDED_CAN_MSG_ID_2_0B;
-      txMessage_Ampera.frame.id = 0x13FFE060;
-      txMessage_Ampera.frame.dlc = 8;
-      txMessage_Ampera.frame.data0 = 0x00;
-      txMessage_Ampera.frame.data1 = 0x00;
-      txMessage_Ampera.frame.data2 = 0x00;
-      txMessage_Ampera.frame.data3 = 0x00;
-      txMessage_Ampera.frame.data4 = 0x00;
-      txMessage_Ampera.frame.data5 = 0x00;
-      txMessage_Ampera.frame.data6 = 0x00;
-      txMessage_Ampera.frame.data7 = 0x00;
-      CANSPI_Transmit(&txMessage_Ampera);
-      ampera_msg_cnt++;
+      // 0x13FFE060 cmd1
+      can->Send(0x13FFE060, data, 8);
       break;
    case 2:
-      //0x10720099, True,  5, 02,3E,00,00,00,00,00,00 - control
-      txMessage_Ampera.frame.idType = dEXTENDED_CAN_MSG_ID_2_0B;
-      txMessage_Ampera.frame.id = 0x10720099;
-      txMessage_Ampera.frame.dlc = 5;
-      txMessage_Ampera.frame.data0 = 0x02;
-      // map requested power to valid range of heater (0 - 0x85)
-      if(heatReq) txMessage_Ampera.frame.data1 = utils::change(power, 0, 6500, 0, 133);//transmitt heater power command when requested
-      if(!heatReq) txMessage_Ampera.frame.data1 = 0x00;//else send 0 power request.
-      txMessage_Ampera.frame.data2 = 0x00;
-      txMessage_Ampera.frame.data3 = 0x00;
-      txMessage_Ampera.frame.data4 = 0x00;
-      CANSPI_Transmit(&txMessage_Ampera);
-      ampera_msg_cnt++;
+      // 0x10720099 power control — byte 1 is mapped power 0..133
+      data[0] = 0x02;
+      data[1] = heatReq ? utils::change(power, 0, 6500, 0, 133) : 0x00;
+      can->Send(0x10720099, data, 5);
       break;
    case 3:
-      //0x102CC040, True,  8, 01,01,CF,0F,00,51,46,60 - cmd2
-      txMessage_Ampera.frame.idType = dEXTENDED_CAN_MSG_ID_2_0B;
-      txMessage_Ampera.frame.id = 0x102CC040;
-      txMessage_Ampera.frame.dlc = 8;
-      txMessage_Ampera.frame.data0 = 0x01;
-      txMessage_Ampera.frame.data1 = 0x01;
-      txMessage_Ampera.frame.data2 = 0xcf;
-      txMessage_Ampera.frame.data3 = 0x0f;
-      txMessage_Ampera.frame.data4 = 0x00;
-      txMessage_Ampera.frame.data5 = 0x51;
-      txMessage_Ampera.frame.data6 = 0x46;
-      txMessage_Ampera.frame.data7 = 0x60;
-      CANSPI_Transmit(&txMessage_Ampera);
-      ampera_msg_cnt++;
+      // 0x102CC040 cmd2
+      data[0] = 0x01; data[1] = 0x01; data[2] = 0xCF; data[3] = 0x0F;
+      data[5] = 0x51; data[6] = 0x46; data[7] = 0x60;
+      can->Send(0x102CC040, data, 8);
       break;
    case 4:
-      //0x102CC040, True,  8, 01,01,CF,0F,00,51,46,60 - cmd2
-      txMessage_Ampera.frame.idType = dEXTENDED_CAN_MSG_ID_2_0B;
-      txMessage_Ampera.frame.id = 0x13FFE060;
-      txMessage_Ampera.frame.dlc = 8;
-      txMessage_Ampera.frame.data0 = 0x01;
-      txMessage_Ampera.frame.data1 = 0x01;
-      txMessage_Ampera.frame.data2 = 0xcf;
-      txMessage_Ampera.frame.data3 = 0x0f;
-      txMessage_Ampera.frame.data4 = 0x00;
-      txMessage_Ampera.frame.data5 = 0x51;
-      txMessage_Ampera.frame.data6 = 0x46;
-      txMessage_Ampera.frame.data7 = 0x60;
-      CANSPI_Transmit(&txMessage_Ampera);
-      ampera_msg_cnt++;
+      // Repeat of cmd1 payload but on 0x13FFE060
+      data[0] = 0x01; data[1] = 0x01; data[2] = 0xCF; data[3] = 0x0F;
+      data[5] = 0x51; data[6] = 0x46; data[7] = 0x60;
+      can->Send(0x13FFE060, data, 8);
       break;
    case 5:
-      //0x10242040, True,  1, 00,00,00,00,00,00,00,00 - cmd3
-      txMessage_Ampera.frame.idType = dEXTENDED_CAN_MSG_ID_2_0B;
-      txMessage_Ampera.frame.id = 0x10242040;
-      txMessage_Ampera.frame.dlc = 1;
-      txMessage_Ampera.frame.data0 = 0x00;
-      CANSPI_Transmit(&txMessage_Ampera);
-      ampera_msg_cnt++;
+      // 0x10242040 cmd3
+      can->Send(0x10242040, data, 1);
       break;
    case 6:
-      //0x102740CB, True,  3, 2D,00,00,00,00,00,00,00 - cmd4
-      txMessage_Ampera.frame.idType = dEXTENDED_CAN_MSG_ID_2_0B;
-      txMessage_Ampera.frame.id = 0x102740CB;
-      txMessage_Ampera.frame.dlc = 3;
-      txMessage_Ampera.frame.data0 = 0x2d;
-      txMessage_Ampera.frame.data1 = 0x00;
-      txMessage_Ampera.frame.data2 = 0x00;
-      CANSPI_Transmit(&txMessage_Ampera);
-      ampera_msg_cnt++;
+      // 0x102740CB cmd4
+      data[0] = 0x2D;
+      can->Send(0x102740CB, data, 3);
       break;
    case 7:
-      // 0x102740CB, True,  3, 19,00,00,00,00,00,00,00 - cmd5
-      txMessage_Ampera.frame.idType = dEXTENDED_CAN_MSG_ID_2_0B;
-      txMessage_Ampera.frame.id = 0x102740CB;
-      txMessage_Ampera.frame.dlc = 3;
-      txMessage_Ampera.frame.data0 = 0x19;
-      txMessage_Ampera.frame.data1 = 0x00;
-      txMessage_Ampera.frame.data2 = 0x00;
-      CANSPI_Transmit(&txMessage_Ampera);
-      ampera_msg_cnt=0;
+      // 0x102740CB cmd5
+      data[0] = 0x19;
+      can->Send(0x102740CB, data, 3);
       break;
    }
-}
+
+   ampera_msg_cnt = (ampera_msg_cnt + 1) & 0x07;
 }
 
 #define FLASH_DELAY 9000
@@ -237,23 +166,13 @@ static void delay(void)
  */
 void AmperaHeater::SendWakeup()
 {
+   if (can == nullptr) return;
+
    DigIo::sw_mode0.Clear();
    DigIo::sw_mode1.Set();  // set HV mode
    delay();
-   // 0x100, False, 0, 00,00,00,00,00,00,00,00
-   txMessage_Ampera.frame.idType = dSTANDARD_CAN_MSG_ID_2_0B;
-   txMessage_Ampera.frame.id = 0x100;
-   txMessage_Ampera.frame.dlc = 8;
-   txMessage_Ampera.frame.data0 = 0x00;
-   txMessage_Ampera.frame.data1 = 0x00;
-   txMessage_Ampera.frame.data2 = 0x00;
-   txMessage_Ampera.frame.data3 = 0x00;
-   txMessage_Ampera.frame.data4 = 0x00;
-   txMessage_Ampera.frame.data5 = 0x00;
-   txMessage_Ampera.frame.data6 = 0x00;
-   txMessage_Ampera.frame.data7 = 0x00;
-   CANSPI_Transmit(&txMessage_Ampera);
-   //may need delay here
+   uint8_t data[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+   can->Send(0x100, data, 8);
    delay();
    DigIo::sw_mode0.Set();
    DigIo::sw_mode1.Set();  // set normal mode

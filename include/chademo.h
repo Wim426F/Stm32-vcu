@@ -23,7 +23,6 @@
 #include <stdint.h>
 #include "my_math.h"
 #include "my_fp.h"
-#include "CANSPI.h"
 #include "chargerint.h"
 #include "params.h"
 #include "iomatrix.h"
@@ -31,6 +30,7 @@
 class FCChademo: public Chargerint
 {
    public:
+      void SetCanInterface(CanHardware* c) override;
       void DecodeCAN(int id, uint32_t data[2]);
       void Task100Ms();//Must be called every 100ms
       void Task200Ms();

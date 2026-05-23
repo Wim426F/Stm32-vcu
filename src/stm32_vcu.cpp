@@ -43,6 +43,7 @@
 #include "printf.h"
 #include "stm32scheduler.h"
 #include "cansdo.h"
+#include "sdocommands.h"
 #include "leafinv.h"
 #include "isa_shunt.h"
 #include "BMW_E39.h"
@@ -57,7 +58,8 @@
 #include "utils.h"
 #include "teslaCharger.h"
 #include "i3LIM.h"
-#include "CANSPI.h"
+#include "mcp25625can.h"
+#include "mcp251863can.h"
 #include "chademo.h"
 #include "heater.h"
 #include "amperaheater.h"
@@ -120,7 +122,7 @@ static Stm32Scheduler* scheduler;
 static bool chargeMode = false;
 static bool chargeModeDC = false;
 static bool ChgLck = false;
-static CanHardware* canInterface[3];
+static CanHardware* canInterface[4];
 static CanMap* canMap;
 static ChargeModes targetCharger;
 static ChargeInterfaces targetChgint;
@@ -850,6 +852,8 @@ static void UpdateInv()
     //This will call SetCanFilters() via the Clear Callback
     canInterface[0]->ClearUserMessages();
     canInterface[1]->ClearUserMessages();
+    if (canInterface[2] != nullptr) canInterface[2]->ClearUserMessages();
+    if (canInterface[3] != nullptr) canInterface[3]->ClearUserMessages();
 }
 
 static void UpdateVehicle()
@@ -889,6 +893,8 @@ static void UpdateVehicle()
     //This will call SetCanFilters() via the Clear Callback
     canInterface[0]->ClearUserMessages();
     canInterface[1]->ClearUserMessages();
+    if (canInterface[2] != nullptr) canInterface[2]->ClearUserMessages();
+    if (canInterface[3] != nullptr) canInterface[3]->ClearUserMessages();
 }
 
 static void UpdateCharger()
@@ -924,6 +930,8 @@ static void UpdateCharger()
     //This will call SetCanFilters() via the Clear Callback
     canInterface[0]->ClearUserMessages();
     canInterface[1]->ClearUserMessages();
+    if (canInterface[2] != nullptr) canInterface[2]->ClearUserMessages();
+    if (canInterface[3] != nullptr) canInterface[3]->ClearUserMessages();
 }
 
 static void UpdateChargeInt()
@@ -950,6 +958,8 @@ static void UpdateChargeInt()
     //This will call SetCanFilters() via the Clear Callback
     canInterface[0]->ClearUserMessages();
     canInterface[1]->ClearUserMessages();
+    if (canInterface[2] != nullptr) canInterface[2]->ClearUserMessages();
+    if (canInterface[3] != nullptr) canInterface[3]->ClearUserMessages();
 }
 
 static void UpdateHeater()
@@ -975,6 +985,8 @@ static void UpdateHeater()
     //This will call SetCanFilters() via the Clear Callback
     canInterface[0]->ClearUserMessages();
     canInterface[1]->ClearUserMessages();
+    if (canInterface[2] != nullptr) canInterface[2]->ClearUserMessages();
+    if (canInterface[3] != nullptr) canInterface[3]->ClearUserMessages();
 }
 
 static void UpdateBMS()
@@ -1006,6 +1018,8 @@ static void UpdateBMS()
     //This will call SetCanFilters() via the Clear Callback
     canInterface[0]->ClearUserMessages();
     canInterface[1]->ClearUserMessages();
+    if (canInterface[2] != nullptr) canInterface[2]->ClearUserMessages();
+    if (canInterface[3] != nullptr) canInterface[3]->ClearUserMessages();
 }
 
 static void UpdateDCDC()
@@ -1029,6 +1043,8 @@ static void UpdateDCDC()
     //This will call SetCanFilters() via the Clear Callback
     canInterface[0]->ClearUserMessages();
     canInterface[1]->ClearUserMessages();
+    if (canInterface[2] != nullptr) canInterface[2]->ClearUserMessages();
+    if (canInterface[3] != nullptr) canInterface[3]->ClearUserMessages();
 }
 
 
@@ -1065,46 +1081,132 @@ static void UpdateShifter()
     //This will call SetCanFilters() via the Clear Callback
     canInterface[0]->ClearUserMessages();
     canInterface[1]->ClearUserMessages();
+    if (canInterface[2] != nullptr) canInterface[2]->ClearUserMessages();
+    if (canInterface[3] != nullptr) canInterface[3]->ClearUserMessages();
 }
 
 
-//Whenever the user clears mapped can messages or changes the
-//CAN interface of a device, this will be called by the CanHardware module
-static void SetCanFilters()
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Per-subsystem CAN RX callback classes
+// Each subsystem gets its own CanCallback so it can be independently bound to a specific bus.
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+class CanRxBinding : public CanCallback {
+public:
+    CanRxBinding(void (*rx)(uint32_t, uint32_t[2]), void (*clear)())
+        : rxFn(rx), clearFn(clear) {}
+    void HandleRx(uint32_t canId, uint32_t data[2], uint8_t) override { rxFn(canId, data); }
+    void HandleClear() override { clearFn(); }
+private:
+    void (*rxFn)(uint32_t, uint32_t[2]);
+    void (*clearFn)();
+};
+
+static CanRxBinding inverterCanRx(
+    [](uint32_t id, uint32_t data[2]) { selectedInverter->DecodeCAN(id, data); },
+    []() { selectedInverter->SetCanInterface(canInterface[Param::GetInt(Param::InverterCan)]); }
+);
+static CanRxBinding vehicleCanRx(
+    [](uint32_t id, uint32_t data[2]) { selectedVehicle->DecodeCAN(id, data); },
+    []() { selectedVehicle->SetCanInterface(canInterface[Param::GetInt(Param::VehicleCan)]); }
+);
+static CanRxBinding shifterCanRx(
+    [](uint32_t id, uint32_t data[2]) { selectedShifter->DecodeCAN(id, data); },
+    []() { selectedShifter->SetCanInterface(canInterface[Param::GetInt(Param::VehicleCan)]); }
+);
+static CanRxBinding chargerCanRx(
+    [](uint32_t id, uint32_t data[2]) { selectedCharger->DecodeCAN(id, data); },
+    []() { selectedCharger->SetCanInterface(canInterface[Param::GetInt(Param::ChargerCan)]); }
+);
+static CanRxBinding chargeIntCanRx(
+    [](uint32_t id, uint32_t data[2]) { selectedChargeInt->DecodeCAN(id, data); },
+    []() { selectedChargeInt->SetCanInterface(canInterface[Param::GetInt(Param::LimCan)]); }
+);
+static CanRxBinding bmsCanRx(
+    [](uint32_t id, uint32_t data[2]) { selectedBMS->DecodeCAN(id, (uint8_t*)data); },
+    []() { selectedBMS->SetCanInterface(canInterface[Param::GetInt(Param::BMSCan)]); }
+);
+static CanRxBinding dcdcCanRx(
+    [](uint32_t id, uint32_t data[2]) { selectedDCDC->DecodeCAN(id, (uint8_t*)data); },
+    []() { selectedDCDC->SetCanInterface(canInterface[Param::GetInt(Param::DCDCCan)]); }
+);
+static CanRxBinding heaterCanRx(
+    [](uint32_t id, uint32_t data[2]) { selectedHeater->DecodeCAN(id, data); },
+    []() { selectedHeater->SetCanInterface(canInterface[Param::GetInt(Param::HeaterCan)]); }
+);
+static CanRxBinding shuntCanRx(
+    [](uint32_t id, uint32_t data[2]) {
+        switch (Param::GetInt(Param::ShuntType)) {
+            case 1: ISA::DecodeCAN(id, data); break;
+            case 2: SBOX::DecodeCAN(id, data); break;
+            case 3: VWBOX::DecodeCAN(id, data); break;
+            case 4: HVCU::DecodeCAN(id, data); break;
+            default: break;
+        }
+    },
+    []() {
+        CanHardware* bus = canInterface[Param::GetInt(Param::ShuntCan)];
+        switch (Param::GetInt(Param::ShuntType)) {
+            case 1: ISA::RegisterCanMessages(bus); break;
+            case 2: SBOX::RegisterCanMessages(bus); break;
+            case 3: VWBOX::RegisterCanMessages(bus); break;
+            case 4: HVCU::RegisterCanMessages(bus); break;
+            default: break;
+        }
+    }
+);
+static CanRxBinding obd2CanRx(
+    [](uint32_t id, uint32_t data[2]) { canOBD2.DecodeCAN(id, data); },
+    []() { canOBD2.SetCanInterface(canInterface[Param::GetInt(Param::OBD2Can)]); }
+);
+// Ensures CanSDO filter 0x601 is registered on both buses after any clear
+static CanRxBinding sdoFilterCanRx(
+    [](uint32_t, uint32_t[2]) {},
+    []() {
+        canInterface[0]->RegisterUserMessage(0x601);
+        canInterface[1]->RegisterUserMessage(0x601);
+    }
+);
+
+// Binding-to-bus mapping table
+struct CanBindingEntry {
+    CanRxBinding* binding;
+    Param::PARAM_NUM busParam;
+};
+
+static const CanBindingEntry canBindings[] = {
+    { &inverterCanRx,  Param::InverterCan },
+    { &vehicleCanRx,   Param::VehicleCan  },
+    { &shifterCanRx,   Param::VehicleCan  },
+    { &chargerCanRx,   Param::ChargerCan  },
+    { &chargeIntCanRx, Param::LimCan      },
+    { &bmsCanRx,       Param::BMSCan      },
+    { &dcdcCanRx,      Param::DCDCCan     },
+    { &heaterCanRx,    Param::HeaterCan   },
+    { &shuntCanRx,     Param::ShuntCan    },
+    { &obd2CanRx,      Param::OBD2Can     },
+};
+
+// Moves each subsystem binding to its designated bus
+static void RebindAllCanCallbacks()
 {
-    CanHardware* inverter_can = canInterface[Param::GetInt(Param::InverterCan)];
-    CanHardware* vehicle_can = canInterface[Param::GetInt(Param::VehicleCan)];
-    CanHardware* shunt_can = canInterface[Param::GetInt(Param::ShuntCan)];
-    CanHardware* lim_can = canInterface[Param::GetInt(Param::LimCan)];
-    CanHardware* charger_can = canInterface[Param::GetInt(Param::ChargerCan)];
-    CanHardware* bms_can = canInterface[Param::GetInt(Param::BMSCan)];
-    CanHardware* obd2_can = canInterface[Param::GetInt(Param::OBD2Can)];
-    CanHardware* dcdc_can = canInterface[Param::GetInt(Param::DCDCCan)];
-    CanHardware* heater_can = canInterface[Param::GetInt(Param::HeaterCan)];
-    
-    selectedInverter->SetCanInterface(inverter_can);
-    selectedVehicle->SetCanInterface(vehicle_can);
-    selectedCharger->SetCanInterface(charger_can);
-    selectedChargeInt->SetCanInterface(lim_can);
-    selectedBMS->SetCanInterface(bms_can);
-    selectedDCDC->SetCanInterface(dcdc_can);
-    selectedShifter->SetCanInterface(vehicle_can);
-    canOBD2.SetCanInterface(obd2_can);
-    selectedHeater->SetCanInterface(heater_can);
-
-    if (Param::GetInt(Param::ShuntType) == 1)  ISA::RegisterCanMessages(shunt_can);//select isa shunt
-    if (Param::GetInt(Param::ShuntType) == 2)  SBOX::RegisterCanMessages(shunt_can);//select bmw sbox
-    if (Param::GetInt(Param::ShuntType) == 3)  VWBOX::RegisterCanMessages(shunt_can);//select vw sbox
-    if (Param::GetInt(Param::ShuntType) == 4)  HVCU::RegisterCanMessages(shunt_can);//select vw sbox
-
-    canInterface[1]->RegisterUserMessage(0x601); //CanSDO
-    canInterface[0]->RegisterUserMessage(0x601); //CanSDO
-
+    for (const auto& entry : canBindings)
+    {
+        canInterface[0]->RemoveCallback(entry.binding);
+        canInterface[1]->RemoveCallback(entry.binding);
+        if (canInterface[2] != nullptr) canInterface[2]->RemoveCallback(entry.binding);
+        if (canInterface[3] != nullptr) canInterface[3]->RemoveCallback(entry.binding);
+        CanHardware* target = canInterface[Param::GetInt(entry.busParam)];
+        if (target != nullptr) target->AddCallback(entry.binding);
+    }
+    canInterface[0]->ClearUserMessages();
+    canInterface[1]->ClearUserMessages();
+    if (canInterface[2] != nullptr) canInterface[2]->ClearUserMessages();
+    if (canInterface[3] != nullptr) canInterface[3]->ClearUserMessages();
 }
 
 void Param::Change(Param::PARAM_NUM paramNum)
 {
-    // This function is called when the user changes a parameter
     switch (paramNum)
     {
     case Param::Inverter:
@@ -1136,12 +1238,27 @@ void Param::Change(Param::PARAM_NUM paramNum)
     case Param::ShuntCan:
     case Param::LimCan:
     case Param::ChargerCan:
-        canInterface[0]->ClearUserMessages();
-        canInterface[1]->ClearUserMessages();
+    case Param::BMSCan:
+    case Param::OBD2Can:
+    case Param::DCDCCan:
+    case Param::HeaterCan:
+        RebindAllCanCallbacks();
         break;
     case Param::CAN3Speed:
-        CANSPI_Initialize();// init the MCP25625 on CAN3
-        CANSPI_ENRx_IRQ();  //init CAN3 Rx IRQ
+        if (canInterface[2] != nullptr)
+        {
+            canInterface[2]->SetBaudrate(Param::GetInt(Param::CAN3Speed) == 1
+                ? CanHardware::Baud500
+                : CanHardware::Baud33);
+            canInterface[2]->ClearUserMessages();
+        }
+        break;
+    case Param::CAN4Speed:
+        if (canInterface[3] != nullptr)
+        {
+            canInterface[3]->SetBaudrate(CanHardware::Baud500);
+            canInterface[3]->ClearUserMessages();
+        }
         break;
     case Param::Tim3_Presc:
     case Param::Tim3_Period:
@@ -1219,33 +1336,6 @@ void Param::Change(Param::PARAM_NUM paramNum)
 }
 
 
-static bool CanCallback(uint32_t id, uint32_t data[2], uint8_t dlc) //This is where we go when a defined CAN message is received.
-{
-    dlc = dlc;
-    switch (id)
-    {
-    case 0x7DF:
-        canOBD2.DecodeCAN(id,data);
-        break;
-
-    default:
-        if (Param::GetInt(Param::ShuntType) == 1)  ISA::DecodeCAN(id, data);
-        if (Param::GetInt(Param::ShuntType) == 2)  SBOX::DecodeCAN(id, data);
-        if (Param::GetInt(Param::ShuntType) == 3)  VWBOX::DecodeCAN(id, data);
-        if (Param::GetInt(Param::ShuntType) == 4)  HVCU::DecodeCAN(id, data);
-
-        selectedInverter->DecodeCAN(id, data);
-        selectedVehicle->DecodeCAN(id, data);
-        selectedCharger->DecodeCAN(id, data);
-        selectedChargeInt->DecodeCAN(id, data);
-        selectedBMS->DecodeCAN(id, (uint8_t*)data);
-        selectedDCDC->DecodeCAN(id, (uint8_t*)data);
-        selectedShifter->DecodeCAN(id,data);
-        selectedHeater->DecodeCAN(id, data);
-        break;
-    }
-    return false;
-}
 
 
 static void ConfigureVariantIO()
@@ -1263,20 +1353,20 @@ extern "C" void tim4_isr(void)
 }
 
 
-extern "C" void exti15_10_isr(void)    //CAN3 MCP25625 interrupt
+extern "C" void exti15_10_isr(void)    //CAN3 MCP25625 (EXTI15) + CAN4 MCP251863 (EXTI11)
 {
-    uCAN_MSG rxMessage;
-    uint32_t canData[2];
-    if(CANSPI_receive(&rxMessage))
+    if (exti_get_flag_status(EXTI15))
     {
-        canData[0]=(rxMessage.frame.data0 | rxMessage.frame.data1<<8 | rxMessage.frame.data2<<16 | rxMessage.frame.data3<<24);
-        canData[1]=(rxMessage.frame.data4 | rxMessage.frame.data5<<8 | rxMessage.frame.data6<<16 | rxMessage.frame.data7<<24);
+        exti_reset_request(EXTI15);
+        Mcp25625Can* m = Mcp25625Can::GetInstance();
+        if (m != nullptr) m->HandleInterrupt();
     }
-    //can cast this to uint32_t[2]. dont be an idiot! * pointer
-    CANSPI_CLR_IRQ();   //Clear Rx irqs in mcp25625
-    exti_reset_request(EXTI15); // clear irq
-    if((rxMessage.frame.id==0x108)||(rxMessage.frame.id==0x109)) selectedChargeInt->DecodeCAN(rxMessage.frame.id, canData);
-
+    if (exti_get_flag_status(EXTI11))
+    {
+        exti_reset_request(EXTI11);
+        Mcp251863Can* m4 = Mcp251863Can::GetInstance();
+        if (m4 != nullptr) m4->HandleInterrupt();
+    }
 }
 
 extern "C" void rtc_isr(void)
@@ -1308,6 +1398,11 @@ extern "C" int main(void)
     clock_setup();
     rtc_setup();
     ConfigureVariantIO();
+    // Deselect both SPI2 CAN chips before any SPI traffic — both CS pins boot LOW
+    // from DIG_IO_CONFIGURE which would let both chips drive MISO at once and
+    // crosstalk their instruction streams (MCP2515 reads look like MCP2518FD resets).
+    DigIo::mcp_cs.Set();
+    DigIo::mcp4_cs.Set();
     gpio_primary_remap(AFIO_MAPR_SWJ_CFG_JTAG_OFF_SW_ON, AFIO_MAPR_CAN2_REMAP | AFIO_MAPR_TIM1_REMAP_FULL_REMAP);//32f107
     usart2_setup();//TOYOTA HYBRID INVERTER INTERFACE
     nvic_setup();
@@ -1321,10 +1416,16 @@ extern "C" int main(void)
 
     Terminal t(USART3, TermCmds);
 
-    // CANBUS 
+    // CANBUS
     Stm32Can c(CAN1, CanHardware::Baud500);
     Stm32Can c2(CAN2, CanHardware::Baud500, true);
-    FunctionPointerCallback cb(CanCallback, SetCanFilters);
+    Mcp25625Can mcp(Param::GetInt(Param::CAN3Speed) == 1 ? CanHardware::Baud500 : CanHardware::Baud33);
+    //Mcp251863Can mcp4(CanHardware::Baud500);
+
+    canInterface[0] = &c;
+    canInterface[1] = &c2;
+    canInterface[2] = &mcp;
+    //canInterface[3] = mcp4.IsPresent() ? &mcp4 : nullptr;
 
     Stm32Can *CanMapDev = &c;
     if (Param::GetInt(Param::CanMapCan) == 0) {
@@ -1336,21 +1437,21 @@ extern "C" int main(void)
     CanMap cm(CanMapDev);
     CanSdo sdo(&c, &cm);
     sdo.SetNodeId(3);//id 3 for vcu?
+    SdoCommands::SetCanMap(&cm);
 
-    // Set up CAN 1 callback and messages to listen for
-    canInterface[0] = &c;
-    canInterface[1] = &c2;
-    c.AddCallback(&cb);
-    c2.AddCallback(&cb);
+    // Register each subsystem binding on its designated bus
+    for (const auto& entry : canBindings)
+    {
+        canInterface[Param::GetInt(entry.busParam)]->AddCallback(entry.binding);
+    }
+    // SDO filter needs 0x601 on both buses
+    c.AddCallback(&sdoFilterCanRx);
+    c2.AddCallback(&sdoFilterCanRx);
+
     TerminalCommands::SetCanMap(&cm);
     canMap = &cm;
 
     CanHardware* shunt_can = canInterface[Param::GetInt(Param::ShuntCan)];
-
-    canOBD2.SetCanInterface(canInterface[Param::GetInt(Param::OBD2Can)]);
-
-    CANSPI_Initialize();// init the MCP25625 on CAN3
-    CANSPI_ENRx_IRQ();  //init CAN3 Rx IRQ
 
     LinBus l(USART1, 19200);
     lin = &l;
@@ -1381,7 +1482,15 @@ extern "C" int main(void)
     while(1)
     {
         char c = 0;
+        CanSdo::SdoFrame* sdoFrame = sdo.GetPendingUserspaceSdo();
         t.Run();
+
+        if (sdoFrame != nullptr)
+        {
+            SdoCommands::ProcessStandardCommands(sdoFrame);
+            sdo.SendSdoReply(sdoFrame);
+        }
+
         if (sdo.GetPrintRequest() == PRINT_JSON)
         {
             TerminalCommands::PrintParamsJson(&sdo, &c);

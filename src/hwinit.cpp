@@ -166,11 +166,16 @@ void nvic_setup(void)
     nvic_enable_irq(NVIC_USB_HP_CAN_TX_IRQ); //CAN TX
     nvic_set_priority(NVIC_USB_HP_CAN_TX_IRQ, 0xe << 4); //second lowest priority
 
-    /* Enable MCP2526 IRQ on PE15 */
+    /* Enable MCP25625 IRQ on PE15 (CAN3) */
     nvic_enable_irq(NVIC_EXTI15_10_IRQ);
     exti_enable_request(EXTI15);
     exti_set_trigger(EXTI15, EXTI_TRIGGER_FALLING);
     exti_select_source(EXTI15,GPIOE);
+    /* Enable MCP251863 IRQ on PE11 (CAN4) */
+    gpio_set_mode(GPIOE, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, GPIO11);
+    exti_enable_request(EXTI11);
+    exti_set_trigger(EXTI11, EXTI_TRIGGER_FALLING);
+    exti_select_source(EXTI11, GPIOE);
     /* Without this the RTC interrupt routine will never be called. */
     nvic_enable_irq(NVIC_RTC_IRQ);
     nvic_set_priority(NVIC_RTC_IRQ, 0x20);

@@ -38,14 +38,19 @@ uint32_t FCChademo::vtgTimeout = 0;
 uint32_t FCChademo::curTimeout = 0;
 static uint32_t chademoStartTime = 0;
 
-uCAN_MSG txMessage;
-
 #define FLASH_DELAY 8000
 static void delay(void)
 {
    int i;
    for (i = 0; i < FLASH_DELAY; i++)       /* Wait a bit. */
       __asm__("nop");
+}
+
+void FCChademo::SetCanInterface(CanHardware* c)
+{
+   can = c;
+   can->RegisterUserMessage(0x108);
+   can->RegisterUserMessage(0x109);
 }
 
 void FCChademo::DecodeCAN(int id, uint32_t data[2])
@@ -115,6 +120,8 @@ void FCChademo::CheckSensorDeviation(uint16_t internalVoltage)
 
 void FCChademo::Task100Ms()//sends chademo messages every 100ms
 {
+   if (can == nullptr) return;
+
    uint32_t data[2];
    bool curSensFault = curTimeout > 10;
    bool vtgSensFault = vtgTimeout > 50;
@@ -122,38 +129,13 @@ void FCChademo::Task100Ms()//sends chademo messages every 100ms
    //Capacity fixed to 200 - so SoC resolution is 0.5
    data[0] = 0;
    data[1] = (targetBatteryVoltage + 40) | 200 << 16;
-
-   txMessage.frame.idType = dSTANDARD_CAN_MSG_ID_2_0B;
-   txMessage.frame.id = 0x100;
-   txMessage.frame.dlc = 8;
-   txMessage.frame.data0 = (data[0] & 0xFF);
-   txMessage.frame.data1 = (data[0]>>8 & 0xFF);
-   txMessage.frame.data2 = (data[0]>>16 & 0xFF);
-   txMessage.frame.data3 = (data[0]>>24 & 0xFF);
-   txMessage.frame.data4 = (data[1] & 0xFF);
-   txMessage.frame.data5 = (data[1]>>8 & 0xFF);
-   txMessage.frame.data6 = (data[1]>>16 & 0xFF);
-   txMessage.frame.data7 = (data[1]>>24 & 0xFF);
-   CANSPI_Transmit(&txMessage);
+   can->Send(0x100, data, 8);
    delay();
 
    data[0] = 0x00FEFF00;
    data[1] = 0;
-
-   txMessage.frame.idType = dSTANDARD_CAN_MSG_ID_2_0B;
-   txMessage.frame.id = 0x101;
-   txMessage.frame.dlc = 8;
-   txMessage.frame.data0 = (data[0] & 0xFF);
-   txMessage.frame.data1 = (data[0]>>8 & 0xFF);
-   txMessage.frame.data2 = (data[0]>>16 & 0xFF);
-   txMessage.frame.data3 = (data[0]>>24 & 0xFF);
-   txMessage.frame.data4 = (data[1] & 0xFF);
-   txMessage.frame.data5 = (data[1]>>8 & 0xFF);
-   txMessage.frame.data6 = (data[1]>>16 & 0xFF);
-   txMessage.frame.data7 = (data[1]>>24 & 0xFF);
-   CANSPI_Transmit(&txMessage);
+   can->Send(0x101, data, 8);
    delay();
-
 
    data[0] = 1 | ((uint32_t)targetBatteryVoltage << 8) | ((uint32_t)rampedCurReq << 24);
    data[1] = (uint32_t)curSensFault << 2 |
@@ -163,19 +145,7 @@ void FCChademo::Task100Ms()//sends chademo messages every 100ms
              (uint32_t)fault << 10 |
              (uint32_t)contactorOpen << 11 |
              (uint32_t)soc << 16;
-
-   txMessage.frame.idType = dSTANDARD_CAN_MSG_ID_2_0B;
-   txMessage.frame.id = 0x102;
-   txMessage.frame.dlc = 8;
-   txMessage.frame.data0 = (data[0] & 0xFF);
-   txMessage.frame.data1 = (data[0]>>8 & 0xFF);
-   txMessage.frame.data2 = (data[0]>>16 & 0xFF);
-   txMessage.frame.data3 = (data[0]>>24 & 0xFF);
-   txMessage.frame.data4 = (data[1] & 0xFF);
-   txMessage.frame.data5 = (data[1]>>8 & 0xFF);
-   txMessage.frame.data6 = (data[1]>>16 & 0xFF);
-   txMessage.frame.data7 = (data[1]>>24 & 0xFF);
-   CANSPI_Transmit(&txMessage);
+   can->Send(0x102, data, 8);
 }
 
 
