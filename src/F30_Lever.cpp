@@ -249,7 +249,8 @@ void F30_Lever::UpdateShifter() {
       break;
     
     case Park:
-      if (DirChanged == false) {
+      // Block shifting out of Park while a charging plug is detected
+      if (DirChanged == false && !Param::GetInt(Param::PlugDet)) {
         if (Down2 == true && Param::GetInt(Param::din_brake)) {
           Dir = Drive;
           this->gear = DRIVE;
