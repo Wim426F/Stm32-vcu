@@ -112,8 +112,11 @@ void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
 void DilithiumMCU::Task100Ms()
 {
    // Send PDO2 MOSI request (0x313)
-   uint8_t request[8] = {0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00};
-   can->Send(0x313, request, 8);
+   if (Param::GetInt(Param::T15Stat)) // only request data if BMS is on.
+   {
+      uint8_t request[8] = {0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00};
+      can->Send(0x313, request, 8);
+   }
 
    // Update timeout
    if (timeoutCounterBMS > 0) timeoutCounterBMS--;

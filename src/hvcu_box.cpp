@@ -76,7 +76,15 @@ void HVCU::handle398(uint32_t data[2])  //HVCU Status
 void HVCU::ControlContactors(int opmode, CanHardware* can)
 {
    static int timerCount = 0;
-   
+   static int offTicks = 0; // since opmode went OFF
+
+   if (opmode != 0 || Param::GetInt(Param::T15Stat) == 1)
+      offTicks = 0;
+   else if (offTicks <= 100)
+      offTicks++;
+
+   if (offTicks > 100) return; // stop sending 1s after OFF, until T15Stat=1
+
    if (++timerCount >= 10) // 10 * 10ms = 100ms
    {
       uint8_t bytes[4];
