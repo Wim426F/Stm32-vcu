@@ -33,7 +33,7 @@ class DilithiumMCU: public BMS
       void Task100Ms() override;
    private:
       bool ChargeAllowed();
-      float chargeCurrentLimit = 0;
+      float chargeCurrentLimit = 100; //FIXME
       float dischargeCurrentLimit = 0;
       int timeoutCounterBMS = 0;
       int timeoutCounterGFM = 0;

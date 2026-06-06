@@ -51,9 +51,25 @@ OBJS     = $(patsubst %.o,$(OUT_DIR)/%.o, $(OBJSL))
 vpath %.c src/ libopeninv/src/ src/vehicles/ src/chargers/ src/inverters/ src/heaters/ src/bms/ src/shifter/ src/charge_interface/ src/dcdc/
 vpath %.cpp src/ libopeninv/src/ src/vehicles/ src/chargers/ src/inverters/ src/heaters/ src/bms/ src/shifter/ src/charge_interface/ src/dcdc
 
-OPENOCD_BASE	= /c/openocd
-OPENOCD 	= $(OPENOCD_BASE)/bin/openocd.exe
-OPENOCD_SCRIPTS = $(OPENOCD_BASE)/share/openocd/scripts
+# Select the host OS config. Auto-detected, but can be forced with
+# 'make HOST_OS=windows' or 'make HOST_OS=linux'.
+ifeq ($(OS),Windows_NT)
+    HOST_OS ?= windows
+else
+    HOST_OS ?= linux
+endif
+
+ifeq ($(HOST_OS),windows)
+    # ---- Windows config ----
+    OPENOCD_BASE	= /c/openocd
+    OPENOCD 	= $(OPENOCD_BASE)/bin/openocd.exe
+    OPENOCD_SCRIPTS = $(OPENOCD_BASE)/share/openocd/scripts
+else
+    # ---- Linux config ----
+    OPENOCD 	?= openocd
+    OPENOCD_SCRIPTS ?= /usr/share/openocd/scripts
+endif
+
 OPENOCD_FLASHER	= $(OPENOCD_SCRIPTS)/interface/stlink.cfg
 OPENOCD_BOARD	= $(OPENOCD_SCRIPTS)/target/stm32f1x.cfg
 

@@ -174,9 +174,9 @@ void i3LIMClass::handle3B4(uint32_t data[2])  //Lim data
 
     bool PP_Status = (bytes[2] & 0x1);
 
-    uint8_t Plug_Conn = (bytes[4] >> 5) & 0x3;
-    bool plugged = (Plug_Conn == (uint8_t)PlugConnection::Plugged);
-    Param::SetInt(Param::PlugDet, plugged || PP_Status);
+    //uint8_t Plug_Conn = (bytes[4] >> 5) & 0x3;
+    //bool plugged = (Plug_Conn == (uint8_t)PlugConnection::Plugged);
+    Param::SetInt(Param::PlugDet, PP_Status);
 
     CP_Mode=(bytes[4] & 0x7);
     Param::SetInt(Param::PilotTyp,CP_Mode);

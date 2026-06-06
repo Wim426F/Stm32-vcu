@@ -42,8 +42,8 @@ bool DilithiumMCU::ChargeAllowed()
    if (timeoutCounterBMS < 1) return false;
 
    // Refuse to charge if the voltage or temperature is out of range.
-   if ((maxCellV/1000) > Param::GetFloat(Param::BMS_VmaxLimit)) return false; // problem
-   if ((minCellV/1000) < Param::GetFloat(Param::BMS_VminLimit)) return false;  // problem
+   if ((maxCellV/1000.0f) > Param::GetFloat(Param::BMS_VmaxLimit)) return false; // problem
+   if ((minCellV/1000.0f) < Param::GetFloat(Param::BMS_VminLimit)) return false;  // problem
    if (maxTempC > Param::GetFloat(Param::BMS_TmaxLimit)) return false;
    if (minTempC < Param::GetFloat(Param::BMS_TminLimit)) return false;
 
@@ -112,7 +112,7 @@ void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
 void DilithiumMCU::Task100Ms()
 {
    // Send PDO2 MOSI request (0x313)
-   if (Param::GetInt(Param::T15Stat)) // only request data if BMS is on.
+   if (Param::GetInt(Param::T15Stat) || Param::GetInt(Param::PlugDet)) // only request data if BMS is on.
    {
       uint8_t request[8] = {0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00};
       can->Send(0x313, request, 8);

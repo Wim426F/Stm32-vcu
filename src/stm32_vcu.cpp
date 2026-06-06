@@ -471,7 +471,7 @@ static void Ms100Task(void)
 
     if(!chargeModeDC)//Request to run ac charge from the interface (e.g. LIM) if we are NOT in DC charge mode.
     {
-        ACrequest=selectedChargeInt->ACRequest(RunChg); //FIXME
+        ACrequest=selectedChargeInt->ACRequest(RunChg);
     }
 
     if (IOMatrix::GetPin(IOMatrix::HEATREQ) != &DigIo::dummypin)
