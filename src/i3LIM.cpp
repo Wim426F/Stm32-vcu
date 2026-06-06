@@ -172,12 +172,11 @@ void i3LIMClass::handle3B4(uint32_t data[2])  //Lim data
     uint8_t PP_Amps=bytes[1];
     Param::SetInt(Param::CableLim,PP_Amps);
 
-    //bool PP = (bytes[2] & 0x1);
-    //Param::SetInt(Param::PlugDet,PP);
+    bool PP_Status = (bytes[2] & 0x1);
 
     uint8_t Plug_Conn = (bytes[4] >> 5) & 0x3;
     bool plugged = (Plug_Conn == (uint8_t)PlugConnection::Plugged);
-    Param::SetInt(Param::PlugDet, plugged);
+    Param::SetInt(Param::PlugDet, plugged || PP_Status);
 
     CP_Mode=(bytes[4] & 0x7);
     Param::SetInt(Param::PilotTyp,CP_Mode);

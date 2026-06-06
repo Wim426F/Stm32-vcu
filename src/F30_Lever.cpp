@@ -37,6 +37,7 @@ bool ParkBut = false;
 bool SportMode = false;
 
 bool DirChanged, ParkChange, SportChange = false;
+bool prevPlugDet = false;
 uint8_t PrkCnt = 0;
 
 uint16_t SportNum =0;
@@ -316,6 +317,18 @@ void F30_Lever::sendcan() {
     }
     else CANcntDwn=20;
     //only talk to shifter when ign is on
+
+    // On rising edge of plug detection, snap to Park. Lever can still be
+    // physically moved out of Park afterwards while plugged in.
+    bool plugDet = Param::GetInt(Param::PlugDet);
+    if(plugDet && !prevPlugDet)
+    {
+        Dir = Park;
+        this->gear = PARK;
+        ParkChange = true;
+        DirChanged = true;
+    }
+    prevPlugDet = plugDet;
 
     if(CANcntDwn!=0)
     {

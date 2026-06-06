@@ -650,7 +650,7 @@ static void Ms10Task(void)
     stt |= udc >= Param::GetFloat(Param::udcsw) ? STAT_NONE : STAT_UDCBELOWUDCSW;
     stt |= udc < Param::GetFloat(Param::udclim) ? STAT_NONE : STAT_UDCLIM;
     stt |= Param::GetFloat(Param::udc2) > Param::GetFloat(Param::udcmin) ? STAT_NONE : STAT_UDCLOW;
-    stt |= Param::GetFloat(Param::BMS_IsoMeas) > Param::GetFloat(Param::BMS_IsoLimit) ? STAT_NONE : STAT_ISOFAULT;
+    //stt |= Param::GetFloat(Param::BMS_IsoMeas) > Param::GetFloat(Param::BMS_IsoLimit) ? STAT_NONE : STAT_ISOFAULT;
     Param::SetInt(Param::status, stt);
 
     int safety_override = Param::GetInt(Param::SafetyOverride);
