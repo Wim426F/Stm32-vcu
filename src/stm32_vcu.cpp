@@ -142,6 +142,7 @@ hours=0, minutes=0, seconds=0,
 alarm=0;			// != 0 when alarm is pending
 
 static uint16_t rlyDly=25;
+static uint16_t chgWindDown=0;//charge spool-down timer (10ms ticks) before opening contactors / going OFF
 
 // Instantiate Classes
 static BMW_E31 e31Vehicle;
@@ -727,6 +728,7 @@ static void Ms10Task(void)
         {
             opmode = MOD_CHARGE;
             rlyDly=500;//Recharge sequence timer  //10 seconds
+            chgWindDown=200;//reset charge wind-down timer (200 x 10ms = 2s)
             Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
         }
         if(initbyCharge && !chargeMode) opmode = MOD_OFF;// These two statements catch a precharge hang from either start mode or run mode.
@@ -764,8 +766,18 @@ static void Ms10Task(void)
             DigIo::dcsw_out.Set();
             if(!chargeMode)
             {
-                opmode = MOD_OFF;
-                rlyDly=250;//Recharge sequence timer for delayed shutdown
+                //Graceful stop: the charger has been commanded 0W (ChRun=false). Stay in
+                //MOD_CHARGE for a brief wind-down.
+                if(chgWindDown!=0) chgWindDown--;
+                if(chgWindDown==0)
+                {
+                    opmode = MOD_OFF;
+                    rlyDly=250;//Recharge sequence timer for delayed shutdown
+                }
+            }
+            else
+            {
+                chgWindDown=200; //(200 x 10ms = 2s)
             }
         }
         ErrorMessage::UnpostAll();
