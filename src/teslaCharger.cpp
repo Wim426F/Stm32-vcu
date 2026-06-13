@@ -91,7 +91,10 @@ void teslaCharger::Task100Ms()
    // Apply efficiency factor
    //final_setpoint *= Param::GetFloat(Param::ChgEff) / 100.0f;
    
+   // When charge is stopping (ChRun false) command 0W so the charger spools
+   // down gracefully instead of seeing "stop" while still commanded full power.
    int HVpwr = (int)final_setpoint;
+   if (!ChRun) HVpwr = 0;
 
    Param::SetFloat(Param::chgPsetp, final_setpoint/1000.0f); // kW
 
