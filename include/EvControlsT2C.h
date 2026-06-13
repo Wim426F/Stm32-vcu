@@ -54,6 +54,8 @@ private:
    float torque = 0;
    float idcMotor = 0;
    int timeoutCounterInv = 0;
+   bool neutralPending = false;
+   uint8_t neutralBurst = 0;
 };
 
 #endif // EVCONTROLST2C_H

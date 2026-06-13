@@ -27,8 +27,8 @@
 #define Sport 0x81
 #define UnParked 0x00
 #define Parked 0x01
-uint8_t Dir = 0 , DirOut = 0;
-int8_t vcuDir = 0 , opmodeSh;
+uint8_t Dir = 0, DirOut = 0;
+int8_t vcuDir = 0, opmodeSh;
 uint8_t ParkState = 0;
 uint8_t CANcntDwn = 20;
 
@@ -40,14 +40,14 @@ bool DirChanged, ParkChange, SportChange = false;
 bool prevPlugDet = false;
 uint8_t PrkCnt = 0;
 
-uint16_t SportNum =0;
+uint16_t SportNum = 0;
 
 uint8_t Cnt3FD = 0;
 uint16_t ShiftState = 0;
 
-
-void F30_Lever::CRC8_begin(void) {
-  uint8_t  remainder;
+void F30_Lever::CRC8_begin(void)
+{
+    uint8_t remainder;
     for (int dividend = 0; dividend < 256; ++dividend)
     {
         remainder = dividend << (WIDTH - 8);
@@ -68,261 +68,297 @@ void F30_Lever::CRC8_begin(void) {
 }
 
 uint8_t F30_Lever::get_crc8(uint8_t const message[], int nBytes, uint8_t final, uint8_t skip)
- {
-   uint8_t data;
+{
+    uint8_t data;
     uint8_t remainder = 0x00;
     for (int i = skip; i < nBytes; ++i)
     {
 
         data = message[i] ^ (remainder >> (WIDTH - 8));
         remainder = crcTable[data] ^ (remainder << 8);
-
     }
-remainder = remainder^final;
+    remainder = remainder ^ final;
 
     return (remainder);
 }
 
-
-
- void F30_Lever::SetCanInterface(CanHardware* c)
+void F30_Lever::SetCanInterface(CanHardware *c)
 {
-   can = c;
-   can->RegisterUserMessage(0x55E);//GWS Hearbeat msg
-   can->RegisterUserMessage(0x65E);//GWS Diag msg
-   can->RegisterUserMessage(0x197);//GWS status msg. Contains info on buttons pressed and lever location.
-   CRC8_begin();//use this function to init the crc generator.
+    can = c;
+    can->RegisterUserMessage(0x55E); // GWS Hearbeat msg
+    can->RegisterUserMessage(0x65E); // GWS Diag msg
+    can->RegisterUserMessage(0x197); // GWS status msg. Contains info on buttons pressed and lever location.
+    CRC8_begin();                    // use this function to init the crc generator.
 }
 
-
-void F30_Lever::DecodeCAN(int id, uint32_t* data)
+void F30_Lever::DecodeCAN(int id, uint32_t *data)
 {
-   uint8_t* bytes = (uint8_t*)data;
-   if (id == 0x197)
-   {
-     Up1 = false;
-     Up2 = false;
-     Down1 = false;
-     Down2 = false;
-     ParkBut = false;
-     SideDown = false;
-     SideUp = false;
+    uint8_t *bytes = (uint8_t *)data;
+    if (id == 0x197)
+    {
+        Up1 = false;
+        Up2 = false;
+        Down1 = false;
+        Down2 = false;
+        ParkBut = false;
+        SideDown = false;
+        SideUp = false;
 
-    switch (bytes[2]) {
-    case 0x1E:
-      Up1 = true;
-      break;
+        switch (bytes[2])
+        {
+        case 0x1E:
+            Up1 = true;
+            break;
 
-    case 0x2E:
-      Up2 = true;
-      break;
+        case 0x2E:
+            Up2 = true;
+            break;
 
-    case 0x3E:
-      Down1 = true;
-      break;
+        case 0x3E:
+            Down1 = true;
+            break;
 
-    case 0x4E:
-      Down2 = true;
-      break;
+        case 0x4E:
+            Down2 = true;
+            break;
 
-    case 0x0E:
-      DirChanged = false;
-      SportMode = false;
-      break;
+        case 0x0E:
+            DirChanged = false;
+            SportMode = false;
+            break;
 
-    case 0x7E:
-      SportMode = true;
-      SportChange = false;
-      break;
+        case 0x7E:
+            SportMode = true;
+            SportChange = false;
+            break;
 
-    case 0x6E:
-      SideDown = true;
-      break;
+        case 0x6E:
+            SideDown = true;
+            break;
 
-    case 0x5E:
-      SideUp = true;
-      break;
+        case 0x5E:
+            SideUp = true;
+            break;
 
-    default:
-      break;
-  }
+        default:
+            break;
+        }
 
-    switch (bytes[3]) {
-    case 0xD5:
-      PrkCnt++;
-      if (PrkCnt > 2) {
-        ParkBut = true;
-      }
-      break;
+        switch (bytes[3])
+        {
+        case 0xD5:
+            PrkCnt++;
+            if (PrkCnt > 2)
+            {
+                ParkBut = true;
+            }
+            break;
 
-    case 0xC0:
-      PrkCnt = 0;
-      ParkBut = false;
-      ParkChange = false;
-      break;
+        case 0xC0:
+            PrkCnt = 0;
+            ParkBut = false;
+            ParkChange = false;
+            break;
 
-    default:
-      break;
-  }
-
-   }
-
+        default:
+            break;
+        }
+    }
 }
 
-void F30_Lever::UpdateShifter() {
-  switch (Dir) {
+void F30_Lever::UpdateShifter()
+{
+    switch (Dir)
+    {
     case Off:
-      Dir = Neutral;
-      break;
+        Dir = Neutral;
+        break;
 
     case Neutral:
-      if (DirChanged == false) {
-        if (Up2 == true && Param::GetInt(Param::din_brake)) {
-          Dir = Reverse;
-          this->gear = REVERSE;
-          DirChanged = true;
-        } else if (Down2 == true && Param::GetInt(Param::din_brake)) {
-          Dir = Drive;
-          this->gear = DRIVE;
-          DirChanged = true;
-        } else if (ParkBut == true && ParkChange == false) {
-          Dir = Park;
-          this->gear = PARK;
-          ParkChange = true;
+        if (DirChanged == false)
+        {
+            if (Up2 == true && Param::GetInt(Param::din_brake))
+            {
+                Dir = Reverse;
+                this->gear = REVERSE;
+                DirChanged = true;
+            }
+            else if (Down2 == true && Param::GetInt(Param::din_brake))
+            {
+                Dir = Drive;
+                this->gear = DRIVE;
+                DirChanged = true;
+            }
+            else if (ParkBut == true && ParkChange == false)
+            {
+                Dir = Park;
+                this->gear = PARK;
+                ParkChange = true;
+            }
         }
-      }
-      break;
+        break;
 
     case Reverse:
-      if (DirChanged == false) {
-        if (Down2 == true && Param::GetInt(Param::din_brake)) {
-          Dir = Drive;
-          this->gear = DRIVE;
-          DirChanged = true;
-        } else if (Down1 == true) {
-          Dir = Neutral;
-          this->gear = NEUTRAL;
-        } else if (ParkBut == true && ParkChange == false) {
-          Dir = Park;
-          this->gear = PARK;
-          ParkChange = true;
+        if (DirChanged == false)
+        {
+            if (Down2 == true && Param::GetInt(Param::din_brake))
+            {
+                Dir = Drive;
+                this->gear = DRIVE;
+                DirChanged = true;
+            }
+            else if (Down1 == true)
+            {
+                Dir = Neutral;
+                this->gear = NEUTRAL;
+            }
+            else if (ParkBut == true && ParkChange == false)
+            {
+                Dir = Park;
+                this->gear = PARK;
+                ParkChange = true;
+            }
         }
-      }
-      break;
+        break;
 
     case Drive:
-    if (DirChanged == false) {
-      if (Up2 == true && Param::GetInt(Param::din_brake)) {
-        Dir = Reverse;
-        this->gear = REVERSE;
-        DirChanged = true;
-      } else if (Up1 == true) {
-        Dir = Neutral;
-        this->gear = NEUTRAL;
-      } else if (SportMode == true) {
-        Dir = Sport;
-      } else if (ParkBut == true && ParkChange == false) {
-        Dir = Park;
-        this->gear = PARK;
-        ParkChange = true;
-      }
-    }
-    break;
+        if (DirChanged == false)
+        {
+            if (Up2 == true && Param::GetInt(Param::din_brake))
+            {
+                Dir = Reverse;
+                this->gear = REVERSE;
+                DirChanged = true;
+            }
+            else if (Up1 == true)
+            {
+                Dir = Neutral;
+                this->gear = NEUTRAL;
+            }
+            else if (SportMode == true)
+            {
+                Dir = Sport;
+            }
+            else if (ParkBut == true && ParkChange == false)
+            {
+                Dir = Park;
+                this->gear = PARK;
+                ParkChange = true;
+            }
+        }
+        break;
 
     case Sport:
-      if (SportMode == false) {
-        Dir = Drive;
-        this->gear = DRIVE;
-      }else if (ParkBut == true && ParkChange == false) {
-        Dir = Park;
-        this->gear = PARK;
-        ParkChange = true;
-      }
-
-      if (SideDown == true && SportChange == false) {
-        SportNum++;
-        SportChange = true;
-      } else if (SideUp == true && SportChange == false && SportNum > 0) {
-        SportNum--;
-        SportChange = true;
-      }
-      break;
-    
-    case Park:
-      // Block shifting out of Park while a charging plug is detected
-      if (DirChanged == false && !Param::GetInt(Param::PlugDet)) {
-        if (Down2 == true && Param::GetInt(Param::din_brake)) {
-          Dir = Drive;
-          this->gear = DRIVE;
-          DirChanged = true;
-        } else if (Up2 == true && Param::GetInt(Param::din_brake)) {
-          Dir = Reverse;
-          this->gear = REVERSE;
-          DirChanged = true;
-        } else if (ParkBut == true && ParkChange == false && Param::GetInt(Param::din_brake)) {
-          Dir = Neutral;
-          this->gear = NEUTRAL;
-          ParkChange = true;
+        if (SportMode == false)
+        {
+            Dir = Drive;
+            this->gear = DRIVE;
         }
-      }
-      break;
+        else if (ParkBut == true && ParkChange == false)
+        {
+            Dir = Park;
+            this->gear = PARK;
+            ParkChange = true;
+        }
+
+        if (SideDown == true && SportChange == false)
+        {
+            SportNum++;
+            SportChange = true;
+        }
+        else if (SideUp == true && SportChange == false && SportNum > 0)
+        {
+            SportNum--;
+            SportChange = true;
+        }
+        break;
+
+    case Park:
+        // Block shifting out of Park while a charging plug is detected
+        if (DirChanged == false && !Param::GetInt(Param::PlugDet))
+        {
+            if (Down2 == true && Param::GetInt(Param::din_brake))
+            {
+                Dir = Drive;
+                this->gear = DRIVE;
+                DirChanged = true;
+            }
+            else if (Up2 == true && Param::GetInt(Param::din_brake))
+            {
+                Dir = Reverse;
+                this->gear = REVERSE;
+                DirChanged = true;
+            }
+            else if (ParkBut == true && ParkChange == false && Param::GetInt(Param::din_brake))
+            {
+                Dir = Neutral;
+                this->gear = NEUTRAL;
+                ParkChange = true;
+            }
+        }
+        break;
 
     default:
-      break;
-  }
-
-}
-
-void F30_Lever::sendcan() {
-  uint8_t bytes[8];
- //-1=Reverse, 0=Neutral, 1=Forward , 2=Park
-  if(vcuDir==0) DirOut=Neutral;
-  if(vcuDir==-1) DirOut=Reverse;
-  if(vcuDir==1) DirOut=Drive;
-  if(vcuDir==2) DirOut=Park;
-  if(opmodeSh!=MOD_RUN) DirOut=Park;
-  bytes[1] = Cnt3FD;
-  bytes[2] = DirOut;
-  bytes[3] = 0x00;
-  bytes[4] = SportNum;
-  bytes[0] = get_crc8(bytes, 5, 0x70, 1);
-
-  can->Send(0x3FD, bytes, 5);
-
-  Cnt3FD++;
-
-  if (Cnt3FD == 0xF) {
-    Cnt3FD = 0;
-  }
-  if(opmodeSh==MOD_RUN) bytes[0] = 0xFF;//backlight level. Set max as a during Run mode 0xFF.
-  else bytes[0]=0x00;//Back light off if not in run mode.
-  bytes[1] = 0;
-
-  can->Send(0x202, bytes, 2);
-
-}
-
-
- void F30_Lever::Task10Ms()
- {
-
- }
-
-
- void F30_Lever::Task100Ms()
- {
-
-    if(!Param::GetInt(Param::T15Stat))
-    {
-    if(CANcntDwn!=0) CANcntDwn--;
+        break;
     }
-    else CANcntDwn=20;
-    //only talk to shifter when ign is on
+}
+
+void F30_Lever::sendcan()
+{
+    uint8_t bytes[8];
+    //-1=Reverse, 0=Neutral, 1=Forward , 2=Park
+    if (vcuDir == 0)
+        DirOut = Neutral;
+    if (vcuDir == -1)
+        DirOut = Reverse;
+    if (vcuDir == 1)
+        DirOut = Drive;
+    if (vcuDir == 2)
+        DirOut = Park;
+    if (opmodeSh != MOD_RUN)
+        DirOut = Park;
+    bytes[1] = Cnt3FD;
+    bytes[2] = DirOut;
+    bytes[3] = 0x00;
+    bytes[4] = SportNum;
+    bytes[0] = get_crc8(bytes, 5, 0x70, 1);
+
+    can->Send(0x3FD, bytes, 5);
+
+    Cnt3FD++;
+
+    if (Cnt3FD == 0xF)
+    {
+        Cnt3FD = 0;
+    }
+    if (opmodeSh == MOD_RUN)
+        bytes[0] = 0xFF; // backlight level. Set max as a during Run mode 0xFF.
+    else
+        bytes[0] = 0x00; // Back light off if not in run mode.
+    bytes[1] = 0;
+
+    can->Send(0x202, bytes, 2);
+}
+
+void F30_Lever::Task10Ms()
+{
+}
+
+void F30_Lever::Task100Ms()
+{
+    if (!Param::GetInt(Param::T15Stat))
+    {
+        if (CANcntDwn != 0)
+            CANcntDwn--;
+    }
+    else
+        CANcntDwn = 20;
+    // only talk to shifter when ign is on
 
     // On rising edge of plug detection, snap to Park. Lever can still be
     // physically moved out of Park afterwards while plugged in.
     bool plugDet = Param::GetInt(Param::PlugDet);
-    if(plugDet && !prevPlugDet)
+    if (plugDet && !prevPlugDet)
     {
         Dir = Park;
         this->gear = PARK;
@@ -331,19 +367,20 @@ void F30_Lever::sendcan() {
     }
     prevPlugDet = plugDet;
 
-    if(CANcntDwn!=0)
+    if (CANcntDwn != 0)
     {
         UpdateShifter();
         sendcan();
     }
 
-    vcuDir=Param::GetInt(Param::dir);
+    vcuDir = Param::GetInt(Param::dir);
     opmodeSh = Param::GetInt(Param::opmode);
-    if(opmodeSh==MOD_OFF) this->gear = PARK;
- }
+    if (opmodeSh == MOD_OFF)
+        this->gear = PARK;
+}
 
- bool F30_Lever::GetGear(Shifter::Sgear& outGear)
+bool F30_Lever::GetGear(Shifter::Sgear &outGear)
 {
-   outGear = gear;    //send the shifter pos
-   return true; //Let caller know we set a valid gear
+    outGear = gear; // send the shifter pos
+    return true;    // Let caller know we set a valid gear
 }

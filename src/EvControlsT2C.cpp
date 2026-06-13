@@ -28,6 +28,8 @@ enum ShiftCommand {
     REVERSE_SHIFT_COMMAND = 0x0F
 };
 
+#define NEUTRAL_RPM_THRESHOLD 20 // motor RPM below which it's safe to shift the T2C drive unit to neutral
+
 EvControlsT2C::EvControlsT2C()
 {
 }
@@ -150,6 +152,19 @@ void EvControlsT2C::Task100Ms()
       Param::SetInt(Param::tmphs, inv_temp);
    }
 
+    // Complete a deferred neutral shift once the motor has slowed enough.
+    // Mirror the 5-message burst used on normal direction changes for reliability.
+    if (neutralPending && ABS(speed) <= NEUTRAL_RPM_THRESHOLD)
+    {
+        neutralPending = false;
+        neutralBurst = 5;
+    }
+    if (neutralBurst > 0)
+    {
+        setGear();
+        neutralBurst--;
+    }
+
     if (counter >= 5) { // 5 * 100ms = run actually at 500ms loop
         counter = 0;
 
@@ -167,6 +182,12 @@ void EvControlsT2C::Task100Ms()
             float max_regen = max_regen_current_val * (float)(Param::GetInt(Param::udc)) / 1000.0f;
             if (Param::GetBool(Param::din_brake)) // dont mix regen with mechanical brake
             {
+                max_regen = 0;
+            }
+
+            if (neutralPending) // neutral requested while spinning: coast with no torque until slow enough to shift
+            {
+                max_power = 0;
                 max_regen = 0;
             }
 
@@ -191,15 +212,28 @@ void EvControlsT2C::Task100Ms()
 
 void EvControlsT2C::setGear()
 {
+    int dir = Param::GetInt(Param::dir);
+
+    // The Tesla DU cogs violently if shifted to neutral while still spinning.
+    // Defer the neutral shift until the motor slows below the threshold; until
+    // then Task100Ms() zeroes the power limits so the motor coasts freely.
+    // Park is treated as neutral here since the DU only has drive/reverse/neutral.
+    if ((dir == GearDir::Neutral || dir == GearDir::Park) && ABS(speed) > NEUTRAL_RPM_THRESHOLD)
+    {
+        neutralPending = true;
+        return;
+    }
+    neutralPending = false;
+
     uint8_t shift_command = NEUTRAL_SHIFT_COMMAND;
 
-    if (Param::GetInt(Param::dir) == GearDir::Forward)  
+    if (dir == GearDir::Forward)
         shift_command = DRIVE_SHIFT_COMMAND;
 
-    if (Param::GetInt(Param::dir) == GearDir::Neutral)  
+    if (dir == GearDir::Neutral)
         shift_command = NEUTRAL_SHIFT_COMMAND;
 
-    if (Param::GetInt(Param::dir) == GearDir::Reverse)  
+    if (dir == GearDir::Reverse)
         shift_command = REVERSE_SHIFT_COMMAND;
 
     uint8_t bytes[8] = {shift_command, 0xBE, 0xEF, 0x00, 0x00, 0x00, 0x00, 0x00};
