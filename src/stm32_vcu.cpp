@@ -534,16 +534,16 @@ static void ControlCabHeater(int opmode)
 {
     //Only run heater in run mode
     //What about charge mode and timer mode?
-    if (opmode == MOD_RUN && Param::GetInt(Param::Control) == 1)
+    if (opmode == MOD_RUN && (Param::GetInt(Param::Control) == 1 || Param::GetBool(Param::HeatReq)))
     {
         IOMatrix::GetPin(IOMatrix::HEATERENABLE)->Set();//Heater enable and coolant pump on
-        selectedHeater->SetTargetTemperature(50); //TODO: Currently does nothing
-        selectedHeater->SetPower(Param::GetInt(Param::HeatPwr),Param::GetBool(Param::HeatReq));
+        selectedHeater->SetTargetTemperature(Param::GetInt(Param::HeatTargetTemp));
+        selectedHeater->SetPower(Param::GetInt(Param::HeatPwr), true);
     }
     else
     {
         IOMatrix::GetPin(IOMatrix::HEATERENABLE)->Clear(); //Disable heater and coolant pump
-        selectedHeater->SetPower(0,0);
+        selectedHeater->SetPower(0, false);
     }
 }
 

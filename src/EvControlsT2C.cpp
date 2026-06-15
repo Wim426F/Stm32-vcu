@@ -57,7 +57,7 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
         uint16_t raw_torque = ((bytes[4] & 0x1F) << 8) | bytes[3]; // Extract 13 bits as unsigned
         int16_t signed_torque = (int16_t)raw_torque;
         if (raw_torque & 0x1000) signed_torque |= 0xE000; // Sign-extend 13-bit value to 16-bit
-        float torque = (float)signed_torque * 2.0f / 9.0f; // divide by 9 because motor has reduction of 9
+        float torque = (float)signed_torque * 2.0f;
         Param::SetFloat(Param::torque, torque); }
         break;
 
