@@ -118,7 +118,13 @@ void HVCU::ControlContactors(int opmode, CanHardware* can)
             break;
 
          case 4: // Mode Charge
-            bytes[1]=RELAY_OFF; // precharge relay 
+            bytes[1]=RELAY_OFF; // precharge relay
+            bytes[2]=RELAY_ON;  // negative relay
+            bytes[3]=RELAY_ON;  // positive relay
+            break;
+
+         case 5: // Shutdown request - HV must stay live, hold contactors closed
+            bytes[1]=RELAY_OFF; // precharge relay
             bytes[2]=RELAY_ON;  // negative relay
             bytes[3]=RELAY_ON;  // positive relay
             break;

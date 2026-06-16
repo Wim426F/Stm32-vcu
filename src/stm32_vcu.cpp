@@ -142,7 +142,7 @@ hours=0, minutes=0, seconds=0,
 alarm=0;			// != 0 when alarm is pending
 
 static uint16_t rlyDly=25;
-static uint16_t chgWindDown=0;//charge spool-down timer (10ms ticks) before opening contactors / going OFF
+static uint16_t shutdownReq=0;//HV-device wind-down timer (10ms ticks) held in MOD_SHUTDOWN_REQUEST before contactors open
 
 // Instantiate Classes
 static BMW_E31 e31Vehicle;
@@ -674,17 +674,11 @@ static void Ms10Task(void)
             IOMatrix::GetPin(IOMatrix::NEGCONTACTOR)->Clear();//Negative contactors off if used
             DigIo::prec_out.Clear();
         }
-        if (Param::GetInt(Param::T15Stat) || chargeMode)
-            IOMatrix::GetPin(IOMatrix::T15ON)->Set();   // Enable powertrain computers
-        else
-            IOMatrix::GetPin(IOMatrix::T15ON)->Clear(); // Shutdown powertrain computers
-
-        
+        //T15ON (powertrain aux power) is driven centrally after the switch, with an off-delay.
         if (((stt & (STAT_POTPRESSED | STAT_UDCLOW)) == STAT_NONE) || safety_override)
         {
             if ((selectedVehicle->Start() && selectedVehicle->Ready()))
             {
-                IOMatrix::GetPin(IOMatrix::T15ON)->Set();   // Enable powertrain computers
                 StartSig=true;
                 //proceed to precharge if 1)throttle not pressed , 2)ign on , 3)start signal rx
                 opmode = MOD_PRECHARGE;
@@ -728,7 +722,6 @@ static void Ms10Task(void)
         {
             opmode = MOD_CHARGE;
             rlyDly=500;//Recharge sequence timer  //10 seconds
-            chgWindDown=200;//reset charge wind-down timer (200 x 10ms = 2s)
             Param::SetInt(Param::TorqDerate,0);//clear torque derate reason
         }
         if(initbyCharge && !chargeMode) opmode = MOD_OFF;// These two statements catch a precharge hang from either start mode or run mode.
@@ -766,18 +759,10 @@ static void Ms10Task(void)
             DigIo::dcsw_out.Set();
             if(!chargeMode)
             {
-                //Graceful stop: the charger has been commanded 0W (ChRun=false). Stay in
-                //MOD_CHARGE for a brief wind-down.
-                if(chgWindDown!=0) chgWindDown--;
-                if(chgWindDown==0)
-                {
-                    opmode = MOD_OFF;
-                    rlyDly=250;//Recharge sequence timer for delayed shutdown
-                }
-            }
-            else
-            {
-                chgWindDown=200; //(200 x 10ms = 2s)
+                //Charger commanded 0W (ChRun=false). Hand off to the shared shutdown-request
+                //state so the PCS and other HV devices wind down before the contactors open.
+                opmode = MOD_SHUTDOWN_REQUEST;
+                shutdownReq=200; //(200 x 10ms = 2s)
             }
         }
         ErrorMessage::UnpostAll();
@@ -794,15 +779,50 @@ static void Ms10Task(void)
         }
         Param::SetInt(Param::opmode, MOD_RUN);
         ErrorMessage::UnpostAll();
-        // FIXME:  might also need battery current check!
-        if(!selectedVehicle->Ready() && ABS(Param::GetInt(Param::speed)) < 100) // never shutdown when driving (pm motor blows up inverter!)
+        // Only leave RUN once it is physically safe to open the contactors:
+        //  speed<100 : rotor essentially stopped, back-EMF can't overvolt the inverter (hard interlock)
+        //  idc<5     : near-zero DC current, no inductive spike / contactor arc on opening
+        //  dir 0/2   : selector in Neutral or Park - driver intent, and redundancy if the speed signal drops out
+        if(!selectedVehicle->Ready() &&
+           ABS(Param::GetInt(Param::speed)) < 100 &&
+           ABS(Param::GetInt(Param::idc)) < 5 &&
+           (Param::GetInt(Param::dir) == 0 || Param::GetInt(Param::dir) == 2))
+        {
+            opmode = MOD_SHUTDOWN_REQUEST;
+            shutdownReq=200;//(200 x 10ms = 2s) let HV devices wind down before contactors open
+        }
+        Param::SetInt(Param::opmode, opmode);
+        break;
+
+    case MOD_SHUTDOWN_REQUEST:
+        //HV stays live and opmode 5 is broadcast on CAN so downstream HV devices
+        //(Tesla PCS charger + DC-DC, A/C compressor) can wind down gracefully before
+        //the contactors open. Hold here for the wind-down window, then drop to MOD_OFF.
+        DigIo::dcsw_out.Set();
+        DigIo::inv_out.Clear();//inverter no longer needed
+        if(shutdownReq!=0) shutdownReq--;
+        if(shutdownReq==0)
         {
             opmode = MOD_OFF;
-            rlyDly=250;//Recharge sequence timer for delayed shutdown
+            rlyDly=250;//settle delay for local HV outputs (HVCU box opens on opmode 0)
         }
         Param::SetInt(Param::opmode, opmode);
         break;
     }
+
+    //Powertrain aux power (T15ON) feeds the separate, BMW-isolated powertrain supply.
+    //Keep it on while ignition/charge is active or HV is live, then hold it a few seconds
+    //after MOD_OFF so the inverter and PCS controller power down on their own terms instead
+    //of browning out as the contactors open.
+    static uint16_t t15Hold = 0;
+    if (Param::GetInt(Param::T15Stat) || chargeMode || opmode != MOD_OFF)
+        t15Hold = 300;//3s (300 x 10ms), refreshed while active
+    else if (t15Hold != 0)
+        t15Hold--;
+    if (t15Hold != 0)
+        IOMatrix::GetPin(IOMatrix::T15ON)->Set();
+    else
+        IOMatrix::GetPin(IOMatrix::T15ON)->Clear();
 
     ControlCabHeater(opmode);
     if (Param::GetInt(Param::ShuntType) == 2)  SBOX::ControlContactors(opmode,canInterface[Param::GetInt(Param::ShuntCan)]);//BMW contactor box

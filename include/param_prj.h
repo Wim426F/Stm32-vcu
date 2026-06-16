@@ -287,7 +287,7 @@
 #define PLTMODES     "0=Absent, 1=ACStd, 2=ACchg, 3=Error, 4=CCS_Not_Rdy, 5=CCS_Rdy, 6=Static"
 #define VEHMODES     "0=BMW_E46, 1=BMW_E6x+, 2=Classic, 3=None, 5=BMW_E39, 6=VAG, 7=Subaru, 8=BMW_E31, 9=BMW_E90"
 #define BMSMODES     "0=Off, 1=SimpBMS, 2=TiDaisychainSingle, 3=TiDaisychainDual, 4=LeafBms, 5=RenaultKangoo33, 6=DilithiumMCU"
-#define OPMODES      "0=Off, 1=Run, 2=Precharge, 3=PchFail, 4=Charge"
+#define OPMODES      "0=Off, 1=Run, 2=Precharge, 3=PchFail, 4=Charge, 5=ShutdownReq"
 #define DOW          "0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat"
 #define CHGTYPS      "0=Off, 1=AC, 2=DCFC"
 #define DCDCTYPES    "0=NoDCDC, 1=TeslaG2"
@@ -344,6 +344,7 @@ enum modes
     MOD_PRECHARGE,
     MOD_PCHFAIL,
     MOD_CHARGE,
+    MOD_SHUTDOWN_REQUEST,
     MOD_LAST
 };
 
