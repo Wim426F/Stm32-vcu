@@ -83,15 +83,13 @@ void OutlanderCanHeater::DecodeCAN(int id, uint32_t data[2])
 void OutlanderCanHeater::handle398(uint32_t data[2])
 {
     uint8_t* bytes = (uint8_t*)data;// arrgghhh this converts the two 32bit array into bytes. See comments are useful:)
-    unsigned int temp1 = bytes[3] - 40;
-    unsigned int temp2 = bytes[4] - 40;
-    if (temp2 > temp1)
+    // A raw byte of 0 is a "no data" placeholder, not a real -40C reading.
+    // Ignore those and keep the last valid value to avoid false heater-on cycling.
+    if (bytes[3] != 0 || bytes[4] != 0)
     {
-        Param::SetInt(Param::tmpheater, temp2);
-    }
-    else
-    {
-        Param::SetInt(Param::tmpheater, temp1);
+        int temp1 = bytes[3] - 40;
+        int temp2 = bytes[4] - 40;
+        Param::SetInt(Param::tmpheater, temp2 > temp1 ? temp2 : temp1);
     }
 
     if (bytes[6] == 0x09)
