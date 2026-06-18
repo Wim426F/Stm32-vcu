@@ -119,8 +119,44 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
     }
 }
 
+
+static const uint8_t  CAN_CRC_POLY     = 0xD5;
+static const uint8_t  TORQUE_CUT_MAGIC = 0x5A;
+static const uint8_t  COUNTER_CYCLE    = 0x0F;
+
+// CRC8 (Comma pedal polynomial 0xD5, init 0xFF) - identical to the receiver.
+static uint8_t crc8(const uint8_t *dat, uint8_t len, uint8_t poly) {
+  uint8_t crc = 0xFF;
+  for (uint8_t i = 0; i < len; i++) {
+    crc ^= dat[i];
+    for (uint8_t j = 0; j < 8; j++) {
+      if (crc & 0x80) crc = (uint8_t)((crc << 1) ^ poly);
+      else            crc = (uint8_t)(crc << 1);
+    }
+  }
+  return crc;
+}
+
 void EvControlsT2C::SetTorque(float torquePercent)
 {
+    // This function has been reused to cut the pedal signals with a Comma pedal.
+    // We don't have any other way to do this unfortunately.
+
+    // This runs every 10ms; only transmit every 5th call -> 50ms (20 Hz).
+    static uint8_t skip = 0;
+    if (++skip < 5) return;
+    skip = 0;
+
+    // 0x201 is a binary torque-cut: cut when no drive torque is commanded.
+    bool cut = Param::GetBool(Param::din_brake) || neutralPending;
+
+    static uint8_t counter = 0;                          // advances only on send
+    uint8_t bytes[3];
+    bytes[0] = cut ? TORQUE_CUT_MAGIC : 0x00;            // 0x00 = normal (any non-magic value)
+    bytes[1] = (uint8_t)(counter & COUNTER_CYCLE);       // rolling counter, low nibble
+    bytes[2] = crc8(bytes, 2, CAN_CRC_POLY);
+    counter = (uint8_t)((counter + 1) & COUNTER_CYCLE);
+    can->Send(0x201, bytes, 3);       // id, array, length
 }
 
 void EvControlsT2C::Task10Ms()
