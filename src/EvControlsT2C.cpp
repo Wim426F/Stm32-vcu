@@ -28,7 +28,7 @@ enum ShiftCommand {
     REVERSE_SHIFT_COMMAND = 0x0F
 };
 
-#define NEUTRAL_RPM_THRESHOLD 20 // motor RPM below which it's safe to shift the T2C drive unit to neutral
+#define NEUTRAL_RPM_THRESHOLD 40 // motor RPM below which it's safe to shift the T2C drive unit to neutral
 
 EvControlsT2C::EvControlsT2C()
 {
@@ -41,6 +41,7 @@ void EvControlsT2C::SetCanInterface(CanHardware* c)
     can->RegisterUserMessage(0x107);
     can->RegisterUserMessage(0x126);
     can->RegisterUserMessage(0x315);
+    can->RegisterUserMessage(0x35A);
     can->RegisterUserMessage(0x118);
 }
 
@@ -103,7 +104,7 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
         break;
         }
 
-    case 0x118: {
+    case 0x118: { // ID118DriveSystemStatus
         //enum Gear { DI_GEAR_INVALID = 0, DI_GEAR_P = 1, DI_GEAR_R = 2, DI_GEAR_N = 3, DI_GEAR_D = 4, DI_GEAR_SNA = 7 };
         //enum KeepDrivePowerStateRequest { NO_REQUEST = 0, KEEP_ALIVE = 1 };
         uint8_t brakePedalState = (bytes[2] >> 3) & 0x03;
@@ -116,7 +117,17 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
         uint8_t keepDrivePowerStateRequest = (bytes[5] >> 7) & 0x01;
         break;
         }
+    
+    case 0x35A: { // ID35A_DI_alertMatrix3
+        // bytes[1] & 0x05: DI_a137_noCapableDriveUnits (bit 8) | DI_a139_rearUnitDisabled (bit 10)
+        // bytes[3] & 0x0A: DI_a154_resolver (bit 25) | DI_a156_currentObserver (bit 27)
+        bool motorFault = (bytes[1] & 0x05) || (bytes[3] & 0x0A);
+        Param::SetInt(Param::errlights, motorFault ? 8 : 0); // Set engine warn light in dashboard
+        break;
+        }
     }
+
+    
 }
 
 
@@ -218,13 +229,16 @@ void EvControlsT2C::Task100Ms()
             float max_regen = max_regen_current_val * (float)(Param::GetInt(Param::udc)) / 1000.0f;
             if (Param::GetBool(Param::din_brake)) // dont mix regen with mechanical brake
             {
-                max_regen = 0;
+                max_regen = 1; 
             }
 
             if (neutralPending) // neutral requested while spinning: coast with no torque until slow enough to shift
             {
-                max_power = 0;
-                max_regen = 0;
+                max_power = 1; // dont set to 0, t2c will run into fault.
+                if (Param::GetInt(Param::dir) == Park) // park and neutralPending mean parkbrake engage while driving, help the epb a bit.
+                    max_regen = (max_regen > 10.0f) ? 10.0f : max_regen;  // Cap at 10kW but don't exceed BMS limit
+                else
+                    max_regen = 1; // Normal situation shift to neutral when driving
             }
 
             // Convert to positive kW for CAN (assuming DU expects positive limits for both)

@@ -39,6 +39,10 @@ static uint8_t gear_BA=0x03; //set to park as initial condition
 static uint8_t mthCnt;
 static uint8_t C1D00 = 0x00;  //0x1D0 counter
 static uint8_t C1D01 = 0x00;  //0x1D0 counter
+static uint8_t A80=0xbe;//0x0A8 first counter byte
+static uint8_t A81=0x00;//0x0A8 second counter byte
+static uint8_t A90=0xe9;//0x0A9 first counter byte
+static uint8_t A91=0x00;//0x0A9 second counter byte
 static uint8_t BA5=0x4d;//0x0BA first counter byte(byte 5)
 static uint8_t BA6=0x80;//0x0BA second counter byte(byte 6)
 static uint8_t AA1=0x00;//0x0AA First counter byte
@@ -322,27 +326,21 @@ void BMW_E90::SendAbsDscMessages(bool Brake_In)
     if (Ready())
     {
         RPM_A = MAX(TARGET_IDLE_RPM, Param::GetInt(Param::speed)) * 4;
-        bytes[1] = 0x50 | AA1;  //low nibble = Counter_170; high nibble 0x5 = unknown status (engine running?)
+        bytes[1] = 0x50 | AA1;  //Counter for 0xAA Byte 0
+        bytes[2] = 0x07;
+        bytes[6] = 0x94;
+        bytes[7] = 0x00;
     }
     else
     {
-        bytes[1] = 0x30 | AA1;  //low nibble = Counter_170; high nibble 0x3 = unknown status (engine off?)
+        bytes[1] = 0x30 | AA1;  //Counter for 0xAA Byte 0
+        bytes[2] = 0xFE;
+        bytes[6] = 0x84;
+        bytes[7] = 0x00;
     }
-    bytes[7] = 0x00;        //unknown, not in DBC
-
-    float potnom = Param::GetFloat(Param::potnom);
-
-    uint16_t pedal_AA = potnom / 0.04f;  // AcceleratorPedalPercentage, 16-bit LE, 0.04 %/bit
-    bytes[2] = pedal_AA & 0xff;        // AcceleratorPedalPercentage low
-    bytes[3] = (pedal_AA >> 8) & 0xff; // AcceleratorPedalPercentage high
-    bytes[4] = RPM_A & 0xff;        // EngineSpeed low  (lowByte(RPM_A))
-    bytes[5] = RPM_A>>8 & 0xff;;    // EngineSpeed high (highByte(RPM_A))
-
-    bytes[6] = 0x80;  //CruisePedalInactive(b7)=1; KickDownPressed(b5)/CruisePedalActive(b6) still unknown
-    if (potnom > 0)
-    {
-        bytes[6] |= 0x14;  //ThrottlePressed(b2)=1, AcceleratorPedalPressed(b4)=1
-    }
+    bytes[3] = 0x00;                // Pedal position 0-255
+    bytes[4] = RPM_A & 0xff;        // lowByte(RPM_A);
+    bytes[5] = RPM_A>>8 & 0xff;;    // highByte(RPM_A);
 
 
     ///Check sum math for 0x0AA///
@@ -364,38 +362,29 @@ void BMW_E90::SendAbsDscMessages(bool Brake_In)
         a8_brake=0x04;
     }
 
-    int16_t torque_A8 = Param::GetFloat(Param::torque) / 0.03125f;  // 16-bit LE signed, 0.03125 Nm/bit
+    int16_t check_A8 = (A81+0x21+0xe0+0x21+0x1f+0x0f+a8_brake+0xa8);
+    check_A8 = (check_A8 / 0x100)+ (check_A8 & 0xff);
+    check_A8 = check_A8 & 0xff;
 
-    // (EngineTorqueWoInterv is torque without traction-control intervention)
-    bytes[1]=torque_A8 & 0xff;          // EngineTorque low
-    bytes[2]=(torque_A8 >> 8) & 0xff;   // EngineTorque high
-    bytes[3]=torque_A8 & 0xff;          // EngineTorqueWoInterv low
-    bytes[4]=(torque_A8 >> 8) & 0xff;   // EngineTorqueWoInterv high
+    bytes[0]=check_A8;  //checksum
+    bytes[1]=A81; //counter byte
+    bytes[2]=0x21;
+    bytes[3]=0xe0;
+    bytes[4]=0x21;
     bytes[5]=0x1f;
     bytes[6]=0x0f;
     bytes[7]=a8_brake;  //brake off =0x04 , brake on = 0x64.
 
-    int16_t check_A8 = (bytes[1]+bytes[2]+bytes[3]+bytes[4]+bytes[5]+bytes[6]+bytes[7]+0xa8);
-    check_A8 = (check_A8 / 0x100)+ (check_A8 & 0xff);
-    check_A8 = check_A8 & 0xff;
-    bytes[0]=check_A8;  //checksum
-
     can->Send(0x0A8, bytes, 8); //Send on CAN
 
-    int16_t torqueReq_A9 = Param::GetFloat(Param::torque) / 0.03125f;  // TorqueRequest, 16-bit LE signed, 0.03125 Nm/bit
-
-    bytes[1]=torqueReq_A9 & 0xff;          // TorqueRequest low
-    bytes[2]=(torqueReq_A9 >> 8) & 0xff;   // TorqueRequest high
-    bytes[3]=0x00;                         // TorqueLoss low  (EV: no friction/accessory loss)
-    bytes[4]=0x00;                         // TorqueLoss high
+    bytes[0]=A90; //first counter byte
+    bytes[1]=A91; //second counter byte
+    bytes[2]=0x79;
+    bytes[3]=0xdf;
+    bytes[4]=0x1d;
     bytes[5]=0xc7;
     bytes[6]=0xe0;
     bytes[7]=0x21;
-
-    int16_t check_A9 = (bytes[1]+bytes[2]+bytes[3]+bytes[4]+bytes[5]+bytes[6]+bytes[7]+0xa9);
-    check_A9 = (check_A9 / 0x100)+ (check_A9 & 0xff);
-    check_A9 = check_A9 & 0xff;
-    bytes[0]=check_A9;  //checksum
 
     can->Send(0x0A9, bytes, 8); //Send on CAN
 
@@ -421,12 +410,20 @@ void BMW_E90::SendAbsDscMessages(bool Brake_In)
 ////here we increment the abs/dsc msg counters
 
     AA1++;
+    A80++;
+    A81++;
+    A90++;
+    A91++;
     BA5++;
     BA6++;
 
     if (BA5==0x5C) //reload initial condition
     {
         AA1 = 0x0;  // 0x0AA second counter byte
+        A80=0xbe;   // 0x0A8 first counter byte
+        A81=0x00;   // 0x0A8 second counter byte
+        A90=0xe9;   // 0x0A9 first counter byte
+        A91=0x00;   // 0x0A9 second counter byte
         BA5=0x4d;   // 0x0BA first counter byte(byte 5)
         BA6=0x80;   // 0x0BA second counter byte(byte 6)
     }

@@ -162,7 +162,7 @@ void DilithiumMCU::Task100Ms()
       Param::SetFloat(Param::idc, 0);
       Param::SetFloat(Param::KWh, 0);
       Param::SetFloat(Param::AMPh, 0);
-      Param::SetFloat(Param::SOC, 0);
+      //Param::SetFloat(Param::SOC, 0); // dont reset SOC to 0, this is to keep fuel sender to BMW correct in car OFF state.
       Param::SetFloat(Param::BMS_Tavg, 0);
       Param::SetFloat(Param::BMS_Isolation, 0);
    }
