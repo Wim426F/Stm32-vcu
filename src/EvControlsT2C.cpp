@@ -132,8 +132,9 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
 
 
 static const uint8_t  CAN_CRC_POLY     = 0xD5;
-static const uint8_t  TORQUE_CUT_MAGIC = 0x5A;
-static const uint8_t  COUNTER_CYCLE    = 0x0F;
+static const uint8_t  REGEN_CUT_FLAG      = 0x01;
+static const uint8_t  ALL_TORQUE_CUT_FLAG = 0x02;
+static const uint8_t  COUNTER_CYCLE       = 0x0F;
 
 // CRC8 (Comma pedal polynomial 0xD5, init 0xFF) - identical to the receiver.
 static uint8_t crc8(const uint8_t *dat, uint8_t len, uint8_t poly) {
@@ -159,13 +160,15 @@ void EvControlsT2C::SetTorque(float torquePercent)
     skip = 0;
 
     // 0x201 is a binary torque-cut: cut when no drive torque is commanded.
-    bool cut = Param::GetBool(Param::din_brake) || neutralPending;
+    bool cutRegen = Param::GetBool(Param::din_brake);
+    bool cutAllTorque = neutralPending;
 
-    static uint8_t counter = 0;                          // advances only on send
+    static uint8_t counter = 0;                              // advances only on send
     uint8_t bytes[3];
-    bytes[0] = cut ? TORQUE_CUT_MAGIC : 0x00;            // 0x00 = normal (any non-magic value)
-    bytes[1] = (uint8_t)(counter & COUNTER_CYCLE);       // rolling counter, low nibble
-    bytes[2] = crc8(bytes, 2, CAN_CRC_POLY);
+    bytes[0]  = cutRegen     ? REGEN_CUT_FLAG      : 0x00;    // 0x00 = no cut
+    bytes[0] |= cutAllTorque ? ALL_TORQUE_CUT_FLAG : 0x00;
+    bytes[1]  = (uint8_t)(counter & COUNTER_CYCLE);          // rolling counter, low nibble
+    bytes[2]  = crc8(bytes, 2, CAN_CRC_POLY);
     counter = (uint8_t)((counter + 1) & COUNTER_CYCLE);
     can->Send(0x201, bytes, 3);       // id, array, length
 }
@@ -227,10 +230,14 @@ void EvControlsT2C::Task100Ms()
             float derated_regen = Param::GetFloat(Param::regenmax);
             float max_regen_current_val = -derated_regen;  // Negative for charge direction
             float max_regen = max_regen_current_val * (float)(Param::GetInt(Param::udc)) / 1000.0f;
+            
+            /* REMOVE . 
+            obsolete because of torque cut, and didnt work because power limit is at least 20kW.
+
             if (Param::GetBool(Param::din_brake)) // dont mix regen with mechanical brake
             {
                 max_regen = 1; 
-            }
+            } 
 
             if (neutralPending) // neutral requested while spinning: coast with no torque until slow enough to shift
             {
@@ -239,7 +246,7 @@ void EvControlsT2C::Task100Ms()
                     max_regen = (max_regen > 10.0f) ? 10.0f : max_regen;  // Cap at 10kW but don't exceed BMS limit
                 else
                     max_regen = 1; // Normal situation shift to neutral when driving
-            }
+            } */
 
             // Convert to positive kW for CAN (assuming DU expects positive limits for both)
             uint16_t power_kW_x100 = (uint16_t)(max_power * 100.0f + 0.5f);         // power limit in kW, factor 0.01, manual rounding

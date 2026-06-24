@@ -663,7 +663,7 @@ static void Ms10Task(void)
         initbyCharge=false;
         DigIo::inv_out.Clear();//inverter power off
         IOMatrix::GetPin(IOMatrix::COOLANTPUMP)->Clear();//Coolant pump off if used
-        Param::SetInt(Param::dir, 2); // shift to park/neutral on shutdown regardless of shifter pos
+        Param::SetInt(Param::dir, Park); // shift to park/neutral on shutdown regardless of shifter pos
         selectedVehicle->DashOff();
         StartSig=false;//reset for next time
 
@@ -762,7 +762,7 @@ static void Ms10Task(void)
                 //Charger commanded 0W (ChRun=false). Hand off to the shared shutdown-request
                 //state so the PCS and other HV devices wind down before the contactors open.
                 opmode = MOD_SHUTDOWN_REQUEST;
-                shutdownReq=200; //(200 x 10ms = 2s)
+                shutdownReq=150; //(150 x 10ms = 1.5s)
             }
         }
         ErrorMessage::UnpostAll();
@@ -780,16 +780,15 @@ static void Ms10Task(void)
         Param::SetInt(Param::opmode, MOD_RUN);
         ErrorMessage::UnpostAll();
         // Only leave RUN once it is physically safe to open the contactors:
-        //  speed<100 : rotor essentially stopped, back-EMF can't overvolt the inverter (hard interlock)
-        //  idc<5     : near-zero DC current, no inductive spike / contactor arc on opening
+        //  speed<50  : rotor essentially stopped, back-EMF can't overvolt the inverter (hard interlock)
+        
         //  dir 0/2   : selector in Neutral or Park - driver intent, and redundancy if the speed signal drops out
         if(!selectedVehicle->Ready() &&
-           ABS(Param::GetInt(Param::speed)) < 100 &&
-           ABS(Param::GetInt(Param::idc)) < 5 &&
-           (Param::GetInt(Param::dir) == 0 || Param::GetInt(Param::dir) == 2))
+           ABS(Param::GetInt(Param::speed)) < 50 &&
+           (Param::GetInt(Param::dir) == Neutral || Param::GetInt(Param::dir) == Park))
         {
             opmode = MOD_SHUTDOWN_REQUEST;
-            shutdownReq=200;//(200 x 10ms = 2s) let HV devices wind down before contactors open
+            shutdownReq=150; //(150 x 10ms = 1.5s) let HV devices wind down before contactors open
         }
         Param::SetInt(Param::opmode, opmode);
         break;
@@ -800,11 +799,12 @@ static void Ms10Task(void)
         //the contactors open. Hold here for the wind-down window, then drop to MOD_OFF.
         DigIo::dcsw_out.Set();
         DigIo::inv_out.Clear();//inverter no longer needed
+        Param::SetInt(Param::dir, Park); // shift to park/neutral on shutdown regardless of shifter pos
         if(shutdownReq!=0) shutdownReq--;
-        if(shutdownReq==0)
+        if(shutdownReq==0 && ABS(Param::GetInt(Param::idc)) < 5) //  idc<5 = near-zero DC current, no arc on opening
         {
-            opmode = MOD_OFF;
-            rlyDly=250;//settle delay for local HV outputs (HVCU box opens on opmode 0)
+            opmode = MOD_OFF; // HVCU box opens contactors on opmode 0)
+            rlyDly=250;//settle delay for local HV outputs 
         }
         Param::SetInt(Param::opmode, opmode);
         break;
