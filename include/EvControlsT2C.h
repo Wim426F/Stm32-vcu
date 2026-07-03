@@ -56,6 +56,7 @@ private:
    int timeoutCounterInv = 0;
    bool neutralPending = false;
    uint8_t neutralBurst = 0;
+   uint8_t actualGear = 7; // DI_gear feedback from 0x118; 7 = SNA until first frame arrives
 };
 
 #endif // EVCONTROLST2C_H

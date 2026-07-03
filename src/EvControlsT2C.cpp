@@ -28,7 +28,17 @@ enum ShiftCommand {
     REVERSE_SHIFT_COMMAND = 0x0F
 };
 
-#define NEUTRAL_RPM_THRESHOLD 40 // motor RPM below which it's safe to shift the T2C drive unit to neutral
+// DI_gear feedback values from 0x118 ID118DriveSystemStatus (the DU's actual gear)
+enum DiGear {
+    DI_GEAR_INVALID = 0,
+    DI_GEAR_P = 1,
+    DI_GEAR_R = 2,
+    DI_GEAR_N = 3,
+    DI_GEAR_D = 4,
+    DI_GEAR_SNA = 7
+};
+
+#define NEUTRAL_RPM_THRESHOLD 20 // motor RPM below which it's safe to shift the T2C drive unit to neutral
 
 EvControlsT2C::EvControlsT2C()
 {
@@ -110,7 +120,7 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
         uint8_t brakePedalState = (bytes[2] >> 3) & 0x03;
         Param::SetInt(Param::din_brake, brakePedalState);
 
-        uint8_t Gear = (bytes[2] >> 5) & 0x07;    
+        actualGear = (bytes[2] >> 5) & 0x07; // DI_gear: the DU's actual gear, used to confirm the neutral shift completed
         uint8_t regenlight = (bytes[3] >> 2) & 0x01;
         Param::SetInt(Param::regen_brakelight, regenlight);
 
@@ -161,7 +171,17 @@ void EvControlsT2C::SetTorque(float torquePercent)
 
     // 0x201 is a binary torque-cut: cut when no drive torque is commanded.
     bool cutRegen = Param::GetBool(Param::din_brake);
-    bool cutAllTorque = neutralPending;
+
+    // Hold the all-torque cut from the moment neutral/park is requested until the
+    // DU actually reports it has reached neutral (DI_gear from 0x118). Gating on
+    // neutralPending alone dropped the cut the instant we *committed* to the shift,
+    // before the DU had transitioned: the pedal went live and the SPM rotor spooled
+    // back up with current flowing right as the DU finally dropped to neutral.
+    // Closing the loop on real gear feedback removes that race. 
+    // Releasing on a shift back to drive is immediate.
+    int dir = Param::GetInt(Param::dir);
+    bool wantNeutral = (dir == GearDir::Neutral || dir == GearDir::Park);
+    bool cutAllTorque = wantNeutral && (actualGear != DI_GEAR_N);
 
     static uint8_t counter = 0;                              // advances only on send
     uint8_t bytes[3];
