@@ -60,7 +60,7 @@ void teslaCharger::DecodeCAN(int id, uint32_t data[2])
 
 void teslaCharger::Task100Ms()
 {
-   if (Param::GetInt(Param::opmode) == MOD_OFF) return;
+   if (!Param::GetInt(Param::T15Stat)) return;
    
    uint8_t bytes[8];
    

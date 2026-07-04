@@ -450,8 +450,6 @@ static void Ms100Task(void)
     Param::SetFloat(Param::InvStat, selectedInverter->GetInverterState()); //update inverter status on web interface
     Param::SetFloat(Param::INVudc, selectedInverter->GetInverterVoltage()); //display inverter derived dc link voltage on web interface
 
-    Param::SetInt(Param::T15Stat, selectedVehicle->Ready());
-
     int32_t IsaTemp=ISA::Temperature;
     Param::SetInt(Param::tmpaux,IsaTemp);
 
@@ -815,14 +813,18 @@ static void Ms10Task(void)
     //after MOD_OFF so the inverter and PCS controller power down on their own terms instead
     //of browning out as the contactors open.
     static uint16_t t15Hold = 0;
-    if (Param::GetInt(Param::T15Stat) || chargeMode || opmode != MOD_OFF)
+    if (selectedVehicle->Ready() || chargeMode || opmode != MOD_OFF)
         t15Hold = 300;//3s (300 x 10ms), refreshed while active
     else if (t15Hold != 0)
-        t15Hold--;
+        t15Hold--;    //T15Stat mirrors this pin (not the donor BMW's T15) so downstream powertrain modules
+    //keep their CAN alive for the whole window, including the wind-down hold. Drive the hold
+    //from Ready() directly, not T15Stat, or it would self-latch and never power down.
     if (t15Hold != 0)
         IOMatrix::GetPin(IOMatrix::T15ON)->Set();
     else
         IOMatrix::GetPin(IOMatrix::T15ON)->Clear();
+        
+    Param::SetInt(Param::T15Stat, t15Hold != 0);
 
     ControlCabHeater(opmode);
     if (Param::GetInt(Param::ShuntType) == 2)  SBOX::ControlContactors(opmode,canInterface[Param::GetInt(Param::ShuntCan)]);//BMW contactor box
