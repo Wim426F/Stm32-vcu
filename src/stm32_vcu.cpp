@@ -385,7 +385,7 @@ static void Ms100Task(void)
 
     if(Param::GetInt(Param::ShuntType) != 0)//Do not do any SOC calcs
     {
-        utils::CalcSOC();
+        //utils::CalcSOC();
     }
 
     Param::SetInt(Param::cruisestt, selectedVehicle->GetCruiseState());
