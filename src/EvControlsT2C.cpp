@@ -161,6 +161,8 @@ static uint8_t crc8(const uint8_t *dat, uint8_t len, uint8_t poly) {
 
 void EvControlsT2C::SetTorque(float torquePercent)
 {
+    if (!Param::GetInt(Param::T15Stat)) return;
+    
     // This function has been reused to cut the pedal signals with a Comma pedal.
     // We don't have any other way to do this unfortunately.
 

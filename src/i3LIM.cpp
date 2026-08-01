@@ -266,7 +266,7 @@ void i3LIMClass::handle272(uint32_t data[2])  //Lim data. CCS contactor state an
 
 void i3LIMClass::Task10Ms()
 {
-    if (Param::GetInt(Param::opmode) == MOD_OFF) return;
+    if (!Param::GetInt(Param::T15Stat)) return;
     
     uint16_t V_Batt=Param::GetInt(Param::udc)*10;
     uint8_t V_Batt2=(Param::GetInt(Param::udc))/4;
@@ -306,7 +306,7 @@ void i3LIMClass::Task10Ms()
 
 void i3LIMClass::Task200Ms()
 {
-    if (Param::GetInt(Param::opmode) == MOD_OFF) return;
+    if (!Param::GetInt(Param::T15Stat)) return;
 
     uint8_t bytes[8];
     //Lim command 3. Used in DC mode.
@@ -498,7 +498,7 @@ void i3LIMClass::Task200Ms()
 
 void i3LIMClass::Task100Ms()
 {
-    if (Param::GetInt(Param::opmode) == MOD_OFF) return;
+    if (!Param::GetInt(Param::T15Stat)) return;
 
     uint8_t bytes[8];
     bytes[0] = 0xff;//vehicle status msg
