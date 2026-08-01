@@ -29,6 +29,7 @@
 #define Parked 0x01
 uint8_t Dir = 0, DirOut = 0;
 int8_t vcuDir = 0, opmodeSh;
+int8_t prevOpmodeSh = -1; // init to non-OFF so first entry into MOD_OFF snaps to Park
 uint8_t ParkState = 0;
 uint8_t CANcntDwn = 20;
 
@@ -289,8 +290,11 @@ void F30_Lever::UpdateShifter()
                 this->gear = REVERSE;
                 DirChanged = true;
             }
-            else if (ParkBut == true && ParkChange == false && Param::GetInt(Param::din_brake))
+            else if (ParkBut == true && ParkChange == false &&
+                     (Param::GetInt(Param::din_brake) || opmodeSh == MOD_OFF))
             {
+                // Allow releasing Park to Neutral without brake when off, so a
+                // dead/errored car can be pushed even if brake pressure is absent.
                 Dir = Neutral;
                 this->gear = NEUTRAL;
                 ParkChange = true;
@@ -315,7 +319,9 @@ void F30_Lever::sendcan()
         DirOut = Drive;
     if (vcuDir == 2)
         DirOut = Park;
-    if (opmodeSh != MOD_RUN)
+    // Force Park (engages EPB) in every non-run mode except MOD_OFF, where dir is
+    // authoritative (Park by default, Neutral only after a deliberate release).
+    if (opmodeSh != MOD_RUN && opmodeSh != MOD_OFF)
         DirOut = Park;
     bytes[1] = Cnt3FD;
     bytes[2] = DirOut;
@@ -375,8 +381,18 @@ void F30_Lever::Task100Ms()
 
     vcuDir = Param::GetInt(Param::dir);
     opmodeSh = Param::GetInt(Param::opmode);
-    if (opmodeSh == MOD_OFF)
+
+    // On entry into MOD_OFF, snap to Park so shutdown auto-parks and engages the
+    // EPB regardless of the last driving gear. Afterwards the lever runs normally,
+    // so a deliberate Park->Neutral press can still release the EPB while off.
+    if (opmodeSh == MOD_OFF && prevOpmodeSh != MOD_OFF)
+    {
+        Dir = Park;
         this->gear = PARK;
+        DirChanged = true;
+        ParkChange = true;
+    }
+    prevOpmodeSh = opmodeSh;
 }
 
 bool F30_Lever::GetGear(Shifter::Sgear &outGear)
