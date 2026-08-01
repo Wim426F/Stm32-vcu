@@ -555,6 +555,9 @@ static void Ms10Task(void)
     int16_t speed = 0;
     float torquePercent;
     int opmode = Param::GetInt(Param::opmode);
+    static int prevOpmode = -1;
+    const bool enteredOff = (opmode == MOD_OFF && prevOpmode != MOD_OFF);
+    prevOpmode = opmode;
     int stt = STAT_NONE;
     int requestedDirection = Param::GetInt(Param::dir);
     int rollingDirection = 0;
@@ -663,7 +666,10 @@ static void Ms10Task(void)
         initbyCharge=false;
         DigIo::inv_out.Clear();//inverter power off
         IOMatrix::GetPin(IOMatrix::COOLANTPUMP)->Clear();//Coolant pump off if used
-        Param::SetInt(Param::dir, Park); // shift to park/neutral on shutdown regardless of shifter pos
+        // Snap to Park once on entry to off (regardless of shifter pos), then let
+        // the shifter own dir so a deliberate Park->Neutral can release it while off.
+        if (enteredOff)
+            Param::SetInt(Param::dir, Park);
         selectedVehicle->DashOff();
         StartSig=false;//reset for next time
 
