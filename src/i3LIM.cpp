@@ -113,6 +113,26 @@ static ChargeReady CHG_Ready=ChargeReady::NotRdy;  //indicator to the LIM that w
 static uint8_t CONT_Ctrl=0;  //4 bits with DC ccs contactor command.
 static uint8_t CCSI_Spnt=0;
 
+//The LIM terminates an AC session that looks idle: it drops the cable current rating and
+//releases the connector. Charge power, battery current and time to full SOC are all reported
+//to it from the same announced figure so they cannot contradict each other, and that figure
+//is held at a floor while we still want to charge. Without the floor a CV taper or balancing
+//(where the DC-DC outdraws the charger) reports zero and the LIM ends the session.
+#define CHG_FLOOR_W    500
+#define FULL_SOCT_MIN  60   //10s units, so never report less than 10 minutes remaining
+
+//Charge power in watts to announce to the LIM. Zero outside an AC session so a deliberate
+//stop by the VCU still reads as a clean stop, and so the DC state machine keeps its own values.
+static uint32_t AnnouncedChargeW()
+{
+    if(CHG_Req!=ChargeRequest::Charge) return 0;
+    if(CP_Mode!=(uint8_t)PilotStatus::AC_Ready && CP_Mode!=(uint8_t)PilotStatus::AC_NotReady) return 0;
+
+    float setpoint = Param::GetFloat(Param::chgPsetp)*1000.0f;  //chgPsetp is kW
+    if(setpoint < CHG_FLOOR_W) return CHG_FLOOR_W;
+    return (uint32_t)setpoint;
+}
+
 void i3LIMClass::SetCanInterface(CanHardware* c)
 {
     can = c;
@@ -270,7 +290,18 @@ void i3LIMClass::Task10Ms()
     
     uint16_t V_Batt=Param::GetInt(Param::udc)*10;
     uint8_t V_Batt2=(Param::GetInt(Param::udc))/4;
-    int32_t I_Batt=(Param::GetInt(Param::idc)+819)*10;//(Param::GetInt(Param::idc);FP_FROMINT
+
+    float udcNow=Param::GetFloat(Param::udc);
+    float amps=Param::GetFloat(Param::idc);
+    uint32_t announcedW=AnnouncedChargeW();
+    if(announcedW!=0 && udcNow>1.0f)
+    {
+        //Report at least the current we intend to draw. Measured idc goes negative when the
+        //DC-DC outdraws a tapering charge, which reads to the LIM as a finished session.
+        float announcedA=announcedW/udcNow;
+        if(amps < announcedA) amps = announcedA;
+    }
+    int32_t I_Batt=(int32_t)(amps*10.0f)+8192;//scale 0.1, offset 819.2, so raw 8192 = 0A
     //I_Batt=0xa0a0;
     //uint16_t SOC_Local=25*10;//(Param::GetInt(Param::SOC))*10;
     //uint16_t SOC_Local=(Param::GetInt(Param::SOC))*10;
@@ -555,12 +586,37 @@ void i3LIMClass::Task100Ms()
 
     //Lim command 2. Used in DC mode
     uint16_t V_limit=0;
-//if(lim_state==6) V_limit=401*10;//set to 400v in energy transfer state
-//if(lim_state!=6) V_limit=Param::GetInt(Param::udc)*10;
+    //if(lim_state==6) V_limit=401*10;//set to 400v in energy transfer state
+    //if(lim_state!=6) V_limit=Param::GetInt(Param::udc)*10;
     //if(lim_state==4) V_limit=Param::GetInt(Param::udc)*10;// drop vlim only during precharge
     if(lim_state==4 || lim_state==5) V_limit=Param::GetInt(Param::udc)*10;// drop vlim only during precharge
     else V_limit=415*10;//set to 415v in all other states
     uint8_t I_limit=125;//125A limit. may not work
+
+    //Time to full SOC. DC seeds Full_SOCt itself and counts it down in Chg_Timers(), so only
+    //touch it when the pilot says AC.
+    if(CP_Mode==(uint8_t)PilotStatus::AC_Ready || CP_Mode==(uint8_t)PilotStatus::AC_NotReady)
+    {
+        if(CHG_Req==ChargeRequest::Charge)
+        {
+            //Chg_Timers() never runs in AC, so without this Full_SOCt stays at its initialiser
+            //0 for the whole session, which the LIM reads as "already complete". Derive it from
+            //the announced power so it tracks the same figure as CHG_Pwr and I_Batt.
+            uint32_t announcedW=AnnouncedChargeW();
+            float remainWh=Param::GetFloat(Param::BattCap)*1000.0f*
+                           (100.0f-Param::GetFloat(Param::SOC))/100.0f;
+            if(remainWh < 0) remainWh = 0;
+            uint32_t units=(uint32_t)((remainWh*360.0f)/announcedW);//Wh/W = hours -> 10s units
+            if(units < FULL_SOCT_MIN) units = FULL_SOCT_MIN;
+            if(units > 0xFFFE) units = 0xFFFE;
+            Full_SOCt=(uint16_t)units;
+        }
+        else
+        {
+            Full_SOCt=0;//not charging, so no time remaining. Clears the last session's value.
+        }
+    }
+
     bytes[0] = V_limit & 0xFF;  //Charge voltage limit LSB. 14 bit signed int.scale 0.1 0xfa2=4002*.1=400.2Volts
     bytes[1] = V_limit >> 8;  //Charge voltage limit MSB. 14 bit signed int.scale 0.1
     bytes[2] = I_limit;  //Fast charge current limit. Not used in logs from 2014-15 vehicle so far. 8 bit unsigned int. scale 1.so max 254amps in theory...
@@ -615,6 +671,15 @@ void i3LIMClass::CCS_Pwr_Con()    //here we control ccs charging during state 6.
     Param::SetInt(Param::CCS_Ireq,CCSI_Spnt);
 }
 
+//FIXME: open-loop timers, only used by the DC state machine (called from case 6 only).
+//Revisit together with the AC path in Task100Ms, which derives Full_SOCt from BattCap/SOC and
+//the announced charge power instead. Known problems:
+// - seeded at line ~773 in units of 1s (Bulk 1800 "30 mins", Full 2400 "40 mins") but the
+//   0x2F1 field scale is 10s per count, so it actually transmits 5h and 6.7h
+// - Chg_Timers() runs from the 100ms task, so Timer_1Sec=5 elapses in 500ms not 1s, and
+//   Timer_60Sec=60 in 30s not 60s. Every timer below therefore runs at double speed
+// - no floor: Bulk_SOCt/Full_SOCt/EOC_Time all underflow past 0 and wrap
+// - purely time based, not driven by SOC or measured current
 void i3LIMClass::Chg_Timers()
 {
     Timer_1Sec--;   //decrement the loop counter
@@ -923,7 +988,7 @@ bool i3LIMClass::ACRequest(bool RunCh)
         CHG_Status=ChargeStatus::Rdy;
         CHG_Req=ChargeRequest::Charge;
         CHG_Ready=ChargeReady::Rdy;
-        CHG_Pwr=(uint32_t)(Param::GetFloat(Param::chgPsetp)/25.0f);//approx 11kw ac
+        CHG_Pwr=AnnouncedChargeW()/25;//12 bit field, scale 25W. 9kW -> 360
         return true;
     } 
     else
