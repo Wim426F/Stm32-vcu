@@ -49,16 +49,27 @@ void OutlanderCanHeater::Task100Ms()
         bytes[6] = 0x00;
         bytes[7] = 0x00;
 
+        // Heater can only do 2 power settings
         currentTemperature = Param::GetInt(Param::tmpheater);
+        uint16_t requestedPower = 0;
         if (currentTemperature < desiredTemperature - 5) {
-            bytes[2] = 0xA2;
-            Param::SetInt(Param::powerheater, 3000);
+            requestedPower = 3000;
         } else if (currentTemperature < desiredTemperature) {
-            bytes[2] = 0x32;
-            Param::SetInt(Param::powerheater, 1500);
-        } else {
-            Param::SetInt(Param::powerheater, 0);
+            requestedPower = 1500;
         }
+
+        // Limit requested power to HeatPwr, stepping down to the next available level
+        uint16_t powerLimit = Param::GetInt(Param::HeatPwr); // We use Heatpwr as a ceiling, not a setpoint
+        if (requestedPower > powerLimit) {
+            requestedPower = powerLimit >= 1500 ? 1500 : 0;
+        }
+
+        if (requestedPower == 3000) {
+            bytes[2] = 0xA2;
+        } else if (requestedPower == 1500) {
+            bytes[2] = 0x32;
+        }
+        Param::SetInt(Param::powerheater, requestedPower);
 
 
         can->Send(0x188, (uint32_t*)bytes, 8);
