@@ -20,12 +20,14 @@
 #include "teslaCharger.h"
 #include "params.h"
 #include "my_math.h"
+#include "errormessage.h"
 
 static bool ChRun = false;
 
 static uint8_t grid_config = 0;
 static float AC_line_voltage = 0;
 static float charger_max_power = 0; // Watt
+static int timeoutCounterPCS = 0;
 
 enum gridConfig
 {
@@ -54,14 +56,28 @@ void teslaCharger::DecodeCAN(int id, uint32_t data[2])
       Param::SetInt(Param::ChgAcVolt, (int)AC_line_voltage);
       grid_config = (bytes[1] >> 2) & 0x03;  // grid_config 2 bits in byte[1] bits 2-3
 
+      // Charger_Fault (bit 12) | DCDC_Fault (bit 13) -> byte[1] bits 4-5. PCS_Other_Alert (bit 14 / byte[1] bit 6) ignored for now.
+      bool chargerFault = (bytes[1] & 0x30) != 0;
+      Param::SetInt(Param::errlights, chargerFault ? 4 : 0); // Set EPC warn light in dashboard
+
       charger_max_power = bytes[2] * 100.0f; // 0.1 kW to Watt
+
+      // Reset timeout
+      timeoutCounterPCS = (uint8_t)(Param::GetInt(Param::CanTimeout) * 10);
    }
 }
 
 void teslaCharger::Task100Ms()
 {
+   // Update timeout
+   if (timeoutCounterPCS > 0) timeoutCounterPCS--;
+   if (timeoutCounterPCS < 1)
+   {
+      ErrorMessage::Post(ERR_PCS_COMM);
+   }
+
    if (!Param::GetInt(Param::T15Stat)) return;
-   
+
    uint8_t bytes[8];
    
    int HVvolts = Param::GetInt(Param::udc);
