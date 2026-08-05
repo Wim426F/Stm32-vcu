@@ -37,10 +37,9 @@ public:
    float GetMotorSpeed() { return speed; }
    int GetInverterState() { return error; }
 
-   // Ev-Controls T2C specific function
+private:
    void setGear();
 
-private:
    uint8_t run10ms;
    uint32_t lastRecv;
    int16_t inv_temp;
@@ -54,8 +53,6 @@ private:
    float torque = 0;
    float idcMotor = 0;
    int timeoutCounterInv = 0;
-   bool neutralPending = false;
-   uint8_t neutralBurst = 0;
    uint8_t actualGear = 7; // DI_gear feedback from 0x118; 7 = SNA until first frame arrives
 };
 

@@ -175,11 +175,7 @@ void EvControlsT2C::SetTorque(float torquePercent)
     bool cutRegen = Param::GetBool(Param::din_brake);
 
     // Hold the all-torque cut from the moment neutral/park is requested until the
-    // DU actually reports it has reached neutral (DI_gear from 0x118). Gating on
-    // neutralPending alone dropped the cut the instant we *committed* to the shift,
-    // before the DU had transitioned: the pedal went live and the SPM rotor spooled
-    // back up with current flowing right as the DU finally dropped to neutral.
-    // Closing the loop on real gear feedback removes that race. 
+    // DU actually reports it has reached neutral (DI_gear from 0x118). 
     // Releasing on a shift back to drive is immediate.
     int dir = Param::GetInt(Param::dir);
     bool wantNeutral = (dir == GearDir::Neutral || dir == GearDir::Park);
@@ -224,23 +220,20 @@ void EvControlsT2C::Task100Ms()
       Param::SetInt(Param::tmphs, inv_temp);
    }
 
-    // Complete a deferred neutral shift once the motor has slowed enough.
-    // Mirror the 5-message burst used on normal direction changes for reliability.
-    if (neutralPending && ABS(speed) <= NEUTRAL_RPM_THRESHOLD)
-    {
-        neutralPending = false;
-        neutralBurst = 5;
-    }
-    if (neutralBurst > 0)
+    // Re-request the gear until the DU confirms it in DI_gear (0x118). A fixed burst
+    // of messages on the direction change was not enough: 0x697 is silently dropped
+    // when the CAN send buffer is saturated, and the DU ignores a request while it is
+    // busy. Also runs during MOD_SHUTDOWN_REQUEST so a neutral shift deferred by motor
+    // speed still completes before the DU loses power.
+    int opmode = Param::GetInt(Param::opmode);
+    if (opmode == MOD_RUN)
     {
         setGear();
-        neutralBurst--;
     }
 
     if (counter >= 5) { // 5 * 100ms = run actually at 500ms loop
         counter = 0;
 
-        int opmode = Param::GetInt(Param::opmode);
         if (opmode == MOD_RUN) {
             // Power and Regen Control (ID 0x696)
             //float derated_idc = Param::GetFloat(Param::derated_idc);
@@ -294,26 +287,27 @@ void EvControlsT2C::setGear()
     int dir = Param::GetInt(Param::dir);
 
     // The Tesla DU cogs violently if shifted to neutral while still spinning.
-    // Defer the neutral shift until the motor slows below the threshold; until
-    // then Task100Ms() zeroes the power limits so the motor coasts freely.
+    // Defer the neutral shift until the motor slows below the threshold; 
+    // setGear() retries every 100ms so it completes as soon as the speed allows.
     // Park is treated as neutral here since the DU only has drive/reverse/neutral.
     if ((dir == GearDir::Neutral || dir == GearDir::Park) && ABS(speed) > NEUTRAL_RPM_THRESHOLD)
-    {
-        neutralPending = true;
         return;
-    }
-    neutralPending = false;
 
     uint8_t shift_command = NEUTRAL_SHIFT_COMMAND;
+    uint8_t expectedGear = DI_GEAR_N;
 
     if (dir == GearDir::Forward)
+    {
         shift_command = DRIVE_SHIFT_COMMAND;
-
-    if (dir == GearDir::Neutral)
-        shift_command = NEUTRAL_SHIFT_COMMAND;
-
-    if (dir == GearDir::Reverse)
+        expectedGear = DI_GEAR_D;
+    }
+    else if (dir == GearDir::Reverse)
+    {
         shift_command = REVERSE_SHIFT_COMMAND;
+        expectedGear = DI_GEAR_R;
+    }
+
+    if (actualGear == expectedGear) return; // DU is already in the requested gear
 
     uint8_t bytes[8] = {shift_command, 0xBE, 0xEF, 0x00, 0x00, 0x00, 0x00, 0x00};
     can->Send(0x697, bytes, 8);
