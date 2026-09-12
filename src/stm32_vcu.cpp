@@ -107,6 +107,7 @@
 #include "EvControlsT2C.h"
 #include "DilithiumMCU.h"
 #include "hvcu_box.h"
+#include "powerLimiter.h"
 
 #define PRINT_JSON 0
 
@@ -298,7 +299,7 @@ static void Ms200Task(void)
     */
     if(opmode==MOD_CHARGE && !chargeModeDC)
     {
-        if(Param::GetInt(Param::udc)>=Param::GetInt(Param::Voltspnt)) //&& Param::GetInt(Param::idc)<=Param::GetInt(Param::IdcTerm)) FIXME
+        if(Param::GetInt(Param::udc)>=Param::GetInt(Param::Voltspnt)) //FIXME: no current-based termination
         {
             RunChg=false;//end charge
             ChgLck=true;//set charge lockout flag
@@ -393,10 +394,11 @@ static void Ms100Task(void)
 
     utils::ProcessCruiseControlButtons();
 
-    selectedInverter->Task100Ms();
     selectedVehicle->Task100Ms();
     selectedCharger->Task100Ms();
     selectedBMS->Task100Ms();
+    PowerLimiter::Task100Ms();
+    selectedInverter->Task100Ms();
     selectedDCDC->Task100Ms();
     selectedShifter->Task100Ms();
     selectedHeater->Task100Ms();
@@ -588,7 +590,6 @@ static void Ms10Task(void)
 
     selectedInverter->SetTorque(torquePercent);
 
-    //if(Param::GetInt(Param::potnom) < Param::GetInt(Param::RegenBrakeLight))
     if(Param::GetBool(Param::regen_brakelight) && !Param::GetBool(Param::din_brake)) // set by CAN msg received from T2C/tesla drive unit
     {
         //enable Brake Light Ouput
@@ -1340,6 +1341,7 @@ extern "C" int main(void)
     spi3_setup();
     tim3_setup(); //For general purpose PWM output
     Param::Change(Param::PARAM_LAST);
+    PowerLimiter::Init();
     DigIo::inv_out.Clear();//inverter power off during bootup
     DigIo::mcp_sby.Clear();//enable can3
 
@@ -1406,6 +1408,7 @@ extern "C" int main(void)
     {
         char c = 0;
         t.Run();
+        PowerLimiter::PollPersist();
         if (sdo.GetPrintRequest() == PRINT_JSON)
         {
             TerminalCommands::PrintParamsJson(&sdo, &c);

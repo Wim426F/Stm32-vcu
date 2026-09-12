@@ -146,7 +146,7 @@ void FoccciClass::handle357(uint32_t data[2])  //FOCCCI Charge Port Info
 
     ACpow = GetInt(Param::ChgEff) *0.01 *  ACpow; //Compensate for charger efficiency
 
-    Param::SetInt(Param::Pwrspnt,ACpow); //write limit to parameter
+    Param::SetInt(Param::PwrAcMax,ACpow); //write limit to parameter
 
 
     if (ChargePort_Plug == 2 || ChargePort_Plug == 3|| ChargePort_Status != 0x00) //Check Plug is inserted
@@ -342,7 +342,7 @@ void FoccciClass::CCS_Pwr_Con()    //here we control ccs charging during state 6
 {
     uint16_t Tmp_Vbatt=Param::GetInt(Param::udc);//Actual measured battery voltage by isa shunt
     uint16_t Tmp_Vbatt_Spnt=Param::GetInt(Param::Voltspnt);
-    uint16_t Tmp_ICCS_Lim=Param::GetInt(Param::CCS_ILim);
+    uint16_t Tmp_ICCS_Lim=(Tmp_Vbatt>1)?(uint16_t)(Param::GetFloat(Param::PwrCcsMax)*1000.0f/Tmp_Vbatt):0;
     uint16_t Tmp_ICCS_Avail=Param::GetInt(Param::CCS_I_Avail);
 
     if(CCSI_Spnt>Tmp_ICCS_Lim)CCSI_Spnt=Tmp_ICCS_Lim; //clamp setpoint to current lim paramater.

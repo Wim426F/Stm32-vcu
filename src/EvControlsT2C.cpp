@@ -40,6 +40,9 @@ enum DiGear {
 
 #define NEUTRAL_RPM_THRESHOLD 20 // motor RPM below which it's safe to shift the T2C drive unit to neutral
 
+static const float MIN_POWER_LIMIT_KW = 1.0f; // Lower bound  non zero otherwise DU treats it as a fault.
+static const float MAX_POWER_LIMIT_KW = 650.0f; // 0x696 is 16bit so 655.35 kW is the largest value that fits.
+
 EvControlsT2C::EvControlsT2C()
 {
 }
@@ -235,16 +238,20 @@ void EvControlsT2C::Task100Ms()
         counter = 0;
 
         if (opmode == MOD_RUN) {
-            // Power and Regen Control (ID 0x696)
-            //float derated_idc = Param::GetFloat(Param::derated_idc);
-            float derated_idc = Param::GetFloat(Param::idcmax);
-            float max_power = derated_idc * (float)(Param::GetInt(Param::udc)) / 1000.0f; // kW
-            Param::SetFloat(Param::maxPower, max_power);
+            // Power and Regen Control (ID 0x696).
+            // PwrMotMax/PwrRegenMax are the user's preference, a hard plateau.
+            // BMS_MaxOutput/MaxInput are what the battery can actually take, from
+            // the power estimator, and may only pull us below the preference.
+            float max_power = MIN(Param::GetFloat(Param::PwrMotMax),
+                                  Param::GetFloat(Param::BMS_MaxOutput));
+            float max_regen = MIN(Param::GetFloat(Param::PwrRegenMax),
+                                  Param::GetFloat(Param::BMS_MaxInput));
 
-            //float derated_regen = Param::GetFloat(Param::derated_regen);
-            float derated_regen = Param::GetFloat(Param::regenmax);
-            float max_regen_current_val = -derated_regen;  // Negative for charge direction
-            float max_regen = max_regen_current_val * (float)(Param::GetInt(Param::udc)) / 1000.0f;
+            // The DU faults on a 0 kW limit, so never command exactly zero - a
+            // momentary BMS dropout should derate, not kill the drive unit.
+            max_power = MIN(MAX(max_power, MIN_POWER_LIMIT_KW), MAX_POWER_LIMIT_KW);
+            max_regen = MIN(MAX(max_regen, MIN_POWER_LIMIT_KW), MAX_POWER_LIMIT_KW);
+            Param::SetFloat(Param::maxPower, max_power);
             
             /* REMOVE . 
             obsolete because of torque cut, and didnt work because power limit is at least 20kW.

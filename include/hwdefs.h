@@ -55,5 +55,9 @@
 #define PARAM_BLKSIZE FLASH_PAGE_SIZE
 #define CAN1_BLKNUM   2
 #define CAN2_BLKNUM   4
+// Power estimator R_eff tables: 5th/6th-to-last pages, below PARAM/CAN/PINDEF.
+// Do not reuse PARAM_BLKNUM. Address = FLASH_END - BLKNUM * PAGE.
+#define PE_BLKNUM     5
+#define PE_PAGES      2
 
 #endif // HWDEFS_H_INCLUDED

@@ -111,7 +111,13 @@ static ChargeStatus CHG_Status=ChargeStatus::NotRdy;  //observed values 0 when n
 static ChargeRequest CHG_Req=ChargeRequest::EndCharge;  //observed values 0 when not charging , 1 when requested to charge. only 1 bit used in logs so far.
 static ChargeReady CHG_Ready=ChargeReady::NotRdy;  //indicator to the LIM that we are ready to charge. observed values 0 when not charging , 1 when commanded to charge. only 2 bits used.
 static uint8_t CONT_Ctrl=0;  //4 bits with DC ccs contactor command.
-static uint8_t CCSI_Spnt=0;
+static uint16_t CCSI_Spnt=0;
+
+//Protocol ceilings for the DC fast charge frame 0x3E9.
+//FC_Cur is a 10 bit field (bits 0-7 in byte 5, bits 8-9 in byte 6), so 511A.
+//CHG_Pwr is a 12 bit field at 25W scale, so 4095*25 = 102.375kW.
+#define CCS_I_MAX        511
+#define CCS_PWR_FIELD_MAX 4095
 
 //The LIM terminates an AC session that looks idle: it drops the cable current rating and
 //releases the connector. Charge power, battery current and time to full SOC are all reported
@@ -131,6 +137,20 @@ static uint32_t AnnouncedChargeW()
     float setpoint = Param::GetFloat(Param::chgPsetp)*1000.0f;  //chgPsetp is kW
     if(setpoint < CHG_FLOOR_W) return CHG_FLOOR_W;
     return (uint32_t)setpoint;
+}
+
+//Charge power forecast for the DC states, in the 12 bit 25W field. Follows the
+//same hierarchy as the current request: the user's ceiling reduced by whatever
+//the battery can take, then clamped to what the field can express.
+static uint32_t DcChargePwrField()
+{
+    float kw = Param::GetFloat(Param::PwrCcsMax);
+    float battKw = Param::GetFloat(Param::BMS_MaxInput);
+    if(battKw < kw) kw = battKw;
+    if(kw < 0.0f) kw = 0.0f;
+    uint32_t field = (uint32_t)(kw * 1000.0f / 25.0f);
+    if(field > CCS_PWR_FIELD_MAX) field = CCS_PWR_FIELD_MAX;
+    return field;
 }
 
 void i3LIMClass::SetCanInterface(CanHardware* c)
@@ -211,7 +231,7 @@ void i3LIMClass::handle3B4(uint32_t data[2])  //Lim data
     // Power calc now done in teslaCharger.cpp as it receives more detailed AC stats.
     //uint16_t ACpow = GetInt(Param::ChgAcVolt) * ChargePort_ACLimit; //calculate Max AC power available
     //ACpow = GetInt(Param::ChgEff) *0.01 *  ACpow; //Compensate for charger efficiency
-    //Param::SetInt(Param::Pwrspnt,ACpow); //write limit to parameter
+    //Param::SetInt(Param::PwrAcMax,ACpow); //write limit to parameter
 
 
     Cont_Volts=bytes[7]*2;
@@ -552,7 +572,8 @@ void i3LIMClass::Task100Ms()
     bytes[3] = (((CHG_Pwr)<<4)|(uint8_t)CHG_Ready);  //charge readiness in bits 0 and 1. 1 = ready to charge.upper nibble is LSB of charge power.Charge power forecast not actual power!
     bytes[4] = CHG_Pwr>>4;   //MSB of charge power.in this case 0x28 = 40x25 = 1000W. Probably net DC power into the Batt.
     bytes[5] = FC_Cur & 0xff;   //LSB of the DC ccs current command
-    bytes[6] = ((CONT_Ctrl<<4)|(FC_Cur>>12));   //bits 0 and 1 MSB of the DC ccs current command.Upper nibble is DC ccs contactor control. Observed in DC fc logs only.
+    // bytes[6] = ((CONT_Ctrl<<4)|(FC_Cur>>12));   //bits 0 and 1 MSB of the DC ccs current command.Upper nibble is DC ccs contactor control. Observed in DC fc logs only.
+    bytes[6] = ((CONT_Ctrl<<4)|((FC_Cur>>8)&0x03));   //bits 0 and 1 MSB of the DC ccs current command.Upper nibble is DC ccs contactor control. Observed in DC fc logs only.
     //transitions from 0 to 2 and start of charge but 2 to 1 to 0 at end. Status and Ready operate the same as in AC logs.
     bytes[7] = EOC_Time;    // end of charge timer.
 
@@ -653,20 +674,28 @@ void i3LIMClass::CCS_Pwr_Con()    //here we control ccs charging during state 6.
 {
     uint16_t Tmp_Vbatt=Param::GetInt(Param::udc);//Actual measured battery voltage by isa shunt
     uint16_t Tmp_Vbatt_Spnt=Param::GetInt(Param::Voltspnt);
-    uint16_t Tmp_ICCS_Lim=Param::GetInt(Param::CCS_ILim);
+    uint16_t Tmp_ICCS_Lim=(Tmp_Vbatt>1)?(uint16_t)(Param::GetFloat(Param::PwrCcsMax)*1000.0f/Tmp_Vbatt):0;
     uint16_t Tmp_ICCS_Avail=Param::GetInt(Param::CCS_I_Avail);
 
     if(CCSI_Spnt>Tmp_ICCS_Lim)CCSI_Spnt=Tmp_ICCS_Lim; //clamp setpoint to current lim paramater.
-    if(CCSI_Spnt>150)CCSI_Spnt=150; //never exceed 150amps for now.
+    if(CCSI_Spnt>CCS_I_MAX)CCSI_Spnt=CCS_I_MAX; //never exceed what the 10 bit field can carry
     if(CCSI_Spnt>=Tmp_ICCS_Avail)CCSI_Spnt=Tmp_ICCS_Avail; //never exceed available current
-    if(CCSI_Spnt>250)CCSI_Spnt=0; //crude way to prevent rollover
-    if((Tmp_Vbatt<Tmp_Vbatt_Spnt)&&(CCS_Ilim==0x0)&&(CCS_Plim==0x0))CCSI_Spnt++;//increment if voltage lower than setpoint and power and current limts not set from charger.
-    if(Tmp_Vbatt>Tmp_Vbatt_Spnt)CCSI_Spnt--;//decrement if voltage equal to or greater than setpoint.
-    if(CCS_Ilim==0x1)CCSI_Spnt--;//decrement if current limit flag is set
-    if(CCS_Plim==0x1)CCSI_Spnt--;//decrement if Power limit flag is set
-    //BMS charge current limit for CCS
-    //Note: No need to worry about bms type as if none selected sets to 999.
-    CCSI_Spnt = MIN(Param::GetInt(Param::BMS_ChargeLim), CCSI_Spnt);
+    //Step toward the setpoint. Every decrement is floored: CCSI_Spnt is unsigned, and
+    //without this the taper wrapped 0 -> 255 at the end of a session, then had to walk
+    //back down from the clamp. The old ">250 set to 0" rollover guard was written for
+    //that case but sat below the clamp, which rewrote 255 before it could fire.
+    if((Tmp_Vbatt<Tmp_Vbatt_Spnt)&&(CCS_Ilim==0x0)&&(CCS_Plim==0x0)&&(CCSI_Spnt<CCS_I_MAX))CCSI_Spnt++;//increment if voltage lower than setpoint and power and current limts not set from charger.
+    if((Tmp_Vbatt>Tmp_Vbatt_Spnt)&&CCSI_Spnt)CCSI_Spnt--;//decrement if voltage equal to or greater than setpoint.
+    if((CCS_Ilim==0x1)&&CCSI_Spnt)CCSI_Spnt--;//decrement if current limit flag is set
+    if((CCS_Plim==0x1)&&CCSI_Spnt)CCSI_Spnt--;//decrement if Power limit flag is set
+    //Battery charge limit for CCS. The estimator works in kW, so convert at the
+    //measured pack voltage. PwrCcsMax above is the user's ceiling; this can only
+    //pull the setpoint below it.
+    if(Tmp_Vbatt > 1)
+    {
+        uint32_t battILim = (uint32_t)(Param::GetFloat(Param::BMS_MaxInput) * 1000.0f / Tmp_Vbatt);
+        if(CCSI_Spnt > battILim) CCSI_Spnt = battILim;
+    }
 
     Param::SetInt(Param::CCS_Ireq,CCSI_Spnt);
 }
@@ -786,7 +815,8 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
             CHG_Status=ChargeStatus::Init;
             CHG_Req=ChargeRequest::Charge;
             CHG_Ready=ChargeReady::Rdy;
-            CHG_Pwr=44000/25;//44kw approx power
+            // CHG_Pwr=44000/25;//44kw approx power
+            CHG_Pwr=DcChargePwrField();
             CCSI_Spnt=0;//No current
             if(Cont_Volts>0)lim_state++; //we wait for the contactor voltage to rise before hitting next state.
 
@@ -803,7 +833,8 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
             CHG_Status=ChargeStatus::Init;
             CHG_Req=ChargeRequest::Charge;
             CHG_Ready=ChargeReady::Rdy;
-            CHG_Pwr=44000/25;//39kw approx power
+            // CHG_Pwr=44000/25;//39kw approx power
+            CHG_Pwr=DcChargePwrField();
             CCSI_Spnt=0;//No current
             if(Cont_Volts<=50)lim_stateCnt++; //we wait for the contactor voltage to drop under 50v to indicate end of cable test
             if(lim_stateCnt>20)
@@ -824,7 +855,8 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
             CHG_Status = ChargeStatus::Init;
             CHG_Req = ChargeRequest::Charge;
             CHG_Ready = ChargeReady::Rdy;
-            CHG_Pwr = 44000 / 25; //49kw approx power
+            // CHG_Pwr = 44000 / 25; //49kw approx power
+            CHG_Pwr=DcChargePwrField();
             CCSI_Spnt = 0;        //No current
 
             if ((Param::GetInt(Param::udc) - Cont_Volts) < 20)
@@ -855,7 +887,8 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
             CHG_Status = ChargeStatus::Init;
             CHG_Req = ChargeRequest::Charge;
             CHG_Ready = ChargeReady::Rdy;
-            CHG_Pwr = 44000 / 25; //49kw approx power
+            // CHG_Pwr = 44000 / 25; //49kw approx power
+            CHG_Pwr=DcChargePwrField();
             CCSI_Spnt = 0;        //No current
 
             // Once the contactors report as closed we're OK to proceed to energy transfer
@@ -870,15 +903,15 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
         {
             Chg_Phase=ChargePhase::EnergyTransfer;
             CONT_Ctrl=0x2; //dc contactor to close mode
-            //FC_Cur=Param::GetInt(Param::CCS_ICmd);//ccs manual control
-            FC_Cur=CCSI_Spnt;//Param::GetInt(Param::CCS_ICmd);//ccs auto ramp
+            FC_Cur=CCSI_Spnt;//ccs auto ramp
             CCS_Pwr_Con(); //ccs power control subroutine
             Chg_Timers();   //Handle remaining time timers.
 //  EOC_Time=0x1E;//end of charge timer
             CHG_Status=ChargeStatus::Rdy;
             CHG_Req=ChargeRequest::Charge;
             CHG_Ready=ChargeReady::Rdy;
-            CHG_Pwr=44000/25;//49kw approx power
+            // CHG_Pwr=44000/25;//49kw approx power
+            CHG_Pwr=DcChargePwrField();
             //we chill out here charging.
 
             if((!RunCh)||CCS_IntStat==0x02)//if we have a request to terminate from the web ui or the evse then move to next state.
@@ -899,7 +932,8 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
             CHG_Status=ChargeStatus::Init;
             CHG_Req=ChargeRequest::Charge;
             CHG_Ready=ChargeReady::Rdy;
-            CHG_Pwr=44000/25;//49kw approx power
+            // CHG_Pwr=44000/25;//49kw approx power
+            CHG_Pwr=DcChargePwrField();
             lim_stateCnt++;
             if(lim_stateCnt>10) //wait 2 seconds
             {
@@ -920,7 +954,8 @@ bool i3LIMClass::DCFCRequest(bool RunCh)
             CHG_Status=ChargeStatus::Init;
             CHG_Req=ChargeRequest::Charge;
             CHG_Ready=ChargeReady::NotRdy;
-            CHG_Pwr=44000/25;//49kw approx power
+            // CHG_Pwr=44000/25;//49kw approx power
+            CHG_Pwr=DcChargePwrField();
             lim_stateCnt++;
             if(Cont_Volts==0)lim_stateCnt++; //we wait for the contactor voltage to return to 0 to indicate contactors open
             if(lim_stateCnt>10)

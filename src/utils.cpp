@@ -451,7 +451,8 @@ float ProcessThrottle(int speed)
     int abs_speed = ABS(speed);
 
     float discharge_factor = Throttle::GetDischargeDerateFactor(udc, idc, temp_hs, temp_m, abs_speed);
-    float derated_discharge_current = Param::GetFloat(Param::idcmax) * discharge_factor;
+    float idcmax = (udc > 1.0f) ? Param::GetFloat(Param::PwrMotMax) * 1000.0f / udc : 0.0f;
+    float derated_discharge_current = idcmax * discharge_factor;
     Param::SetFloat(Param::derated_idc, derated_discharge_current);
 
     float regen_factor = Throttle::GetRegenDerateFactor(udc, idc, temp_hs, temp_m, abs_speed);

@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.30.WIM.9
+#define VER 2.30.WIM.10
 
 
 /* Entries must be ordered as follows:
@@ -27,7 +27,7 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 151
+//Next param id (increase when adding new parameter!): 159
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,       9,      0,      5  ) \
@@ -52,16 +52,15 @@
     PARAM_ENTRY(CAT_SETUP,     CanTimeout,  "sec",     0,       120,    10,     143 ) \
     PARAM_ENTRY(CAT_SETUP,     InvTimeout,  "sec",     0,       120,    1,      144 ) \
     PARAM_ENTRY(CAT_SETUP,     PrechargeTimeout,"sec", 1,       10,     2,      145 ) \
-    PARAM_ENTRY(CAT_SETUP,     FuelCap,     "Liters",  1,       1024,    63,     148 ) \
     PARAM_ENTRY(CAT_SETUP,     SafetyOverride, ONOFF,  0,       1,      0,      149 ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmin,      "dig",     0,       4095,   0,      7  ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmax,      "dig",     0,       4095,   4095,   8  ) \
     PARAM_ENTRY(CAT_THROTTLE,  pot2min,     "dig",     0,       4095,   4095,   9  ) \
     PARAM_ENTRY(CAT_THROTTLE,  pot2max,     "dig",     0,       4095,   4095,   10 ) \
     PARAM_ENTRY(CAT_THROTTLE,  regenrpm,    "rpm",     100,     10000,  1500,   60 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  regenendrpm,"rpm",      100,     10000,  100,    126 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  regenmax,     "A",     -5000,    0,     -200,    61 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  regenBrake,    "%",    -35,      0,     -10,     122 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  regenendrpm, "rpm",     100,     10000,  100,    126 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  regenmax,    "%",      -35,      0,     -10,     61 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  regenBrake,  "%",      -35,      0,     -10,     122 ) \
     PARAM_ENTRY(CAT_THROTTLE,  regenramp,   "%/10ms",  0.1,     100,    1,      68 ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmode,     POTMODES,  0,       1,      0,      11 ) \
     PARAM_ENTRY(CAT_THROTTLE,  dirmode,     DIRMODES,  0,       4,      1,      12 ) \
@@ -72,16 +71,15 @@
     PARAM_ENTRY(CAT_THROTTLE,  revRegen,     ONOFF,    0,       1,      0,      137 ) \
     PARAM_ENTRY(CAT_THROTTLE,  udcmin,      "V",       0,       1000,   450,    19 ) \
     PARAM_ENTRY(CAT_THROTTLE,  udclim,      "V",       0,       1000,   520,    20 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  idcmax,      "A",       0,       5000,   5000,   21 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  idcmin,      "A",      -5000,    0,     -5000,   22 ) \
     PARAM_ENTRY(CAT_THROTTLE,  tmphsmax,    "°C",      50,      150,    85,     23 ) \
     PARAM_ENTRY(CAT_THROTTLE,  tmpmmax,     "°C",      70,      300,    300,    24 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtmax,    "%",       0,       100,    100,    25 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtmin,    "%",      -100,     0,     -100,    26 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtmaxRev,    "%",    0,       100,    30,    123 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtdead,   "%",       0,       50,     10,     76 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  RegenBrakeLight,   "%", -100,    0,     -15,      128 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtrpmfilt,"rpm/10ms",0.1,     200,    15,    131 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  PwrMotMax,   "kW",      0,       600,    150,    151 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  PwrRegenMax, "kW",      0,       600,    35,     152 ) \
     PARAM_ENTRY(CAT_LEXUS,     Gear,        LOWHIGH,   0,       3,      0,      27 ) \
     PARAM_ENTRY(CAT_LEXUS,     OilPump,     "%",       0,       100,    50,     28 ) \
     PARAM_ENTRY(CAT_CRUISE,    cruisestep,  "rpm",     1,       1000,   200,    29 ) \
@@ -93,10 +91,8 @@
     PARAM_ENTRY(CAT_COMM,      CAN3Speed,   CAN3SPD,   0,       2,      0,      77 ) \
     PARAM_ENTRY(CAT_CHARGER,   BattCap,     "kWh",     0.1,     250,    22,     38 ) \
     PARAM_ENTRY(CAT_CHARGER,   Voltspnt,    "V",       0,       1000,   395,    40 ) \
-    PARAM_ENTRY(CAT_CHARGER,   Pwrspnt,     "W",       0,       12000,  1500,   41 ) \
-    PARAM_ENTRY(CAT_CHARGER,   IdcTerm,     "A",       0,       150,    0,      56 ) \
-    PARAM_ENTRY(CAT_CHARGER,   CCS_ICmd,    "A",       0,       150,    0,      42 ) \
-    PARAM_ENTRY(CAT_CHARGER,   CCS_ILim,    "A",       0,       350,    100,    43 ) \
+    PARAM_ENTRY(CAT_CHARGER,   PwrAcMax,    "W",       0,       12000,  9000,   41 ) \
+    PARAM_ENTRY(CAT_CHARGER,   PwrCcsMax,   "kW",      0,       350,    50,     153 ) \
     PARAM_ENTRY(CAT_CHARGER,   CCS_SOCLim,  "%",       0,       100,    80,     44 ) \
     PARAM_ENTRY(CAT_CHARGER,   SOCFC,       "%",       0,       100,    50,     79 ) \
     PARAM_ENTRY(CAT_CHARGER,   Chgctrl,     CHGCTRL,   0,       2,      0,      45 ) \
@@ -111,6 +107,11 @@
     PARAM_ENTRY(CAT_BMS,       BMS_TminLimit, "°C",    -100,    100,    5,      94 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_TmaxLimit, "°C",    -100,    100,    50,     95 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,       100000, 500,    139 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_VsagLimit, "V",     2.0,     4.0,    2.5,    154 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_VdragLimit,"V",     3.5,     4.5,    4.2,    155 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_Tderate,  "°C",     -100,    100,    40,     156 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_TderateChg,"°C",    -100,    100,    35,     158 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_PwrHot,   "kW",     0,       100,    15,     157 ) \
     PARAM_ENTRY(CAT_HEATER,    Heater,      HTTYPE,    0,       3,      0,      57 ) \
     PARAM_ENTRY(CAT_HEATER,    Control,     HTCTRL,    0,       2,      0,      58 ) \
     PARAM_ENTRY(CAT_HEATER,    HeatPwr,     "W",       0,       6500,   0,      59 ) \
@@ -188,6 +189,10 @@
     VALUE_ENTRY(BMS_ChargeLim, "A",                 2088 ) \
     VALUE_ENTRY(BMS_MaxInput,  "kW",                2105 ) \
     VALUE_ENTRY(BMS_MaxOutput, "kW",                2106 ) \
+    VALUE_ENTRY(BMS_IchgMax,   "A",                 2118 ) \
+    VALUE_ENTRY(BMS_IdisMax,   "A",                 2119 ) \
+    VALUE_ENTRY(BMS_Rpack,     "mOhm",              2120 ) \
+    VALUE_ENTRY(BMS_LimSrc,    BMSLIMSRC,           2121 ) \
     VALUE_ENTRY(BMS_MaxCharge, "W",                 2101 ) \
     VALUE_ENTRY(BMS_Isolation, "Ohm",               2104 ) \
     VALUE_ENTRY(BMS_IsoMeas,   "Ohm/v",             2099 ) \
@@ -262,7 +267,7 @@
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
     VALUE_ENTRY(DriverDoorSt,  DMODES,              2112 ) \
 
-//Next value Id: 2117
+//Next value Id: 2122
 
 //Dead params
 /*
@@ -279,6 +284,7 @@
 #define APINFUNCS    "0=None, 1=ProxPilot, 2=BrakeVacSensor"
 #define SHIFTERS     "0=None, 1=BMW_F30, 2=JLR_G1, 3=JLR_G2, 4=BMW_E65"
 #define SHNTYPE      "0=None, 1=ISA, 2=SBOX, 3=VAG, 4=HVCU"
+#define BMSLIMSRC    "0=None, 1=Sag, 2=Drag, 3=Hot, 4=Cold, 5=NoData"
 #define DMODES       "0=CLOSED, 1=OPEN, 2=ERROR, 3=INVALID"
 #define POTMODES     "0=SingleChannel, 1=DualChannel"
 #define BTNSWITCH    "0=Button, 1=Switch, 2=CAN"

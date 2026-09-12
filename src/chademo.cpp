@@ -205,7 +205,7 @@ void FCChademo::Task200Ms()
    {
       int udc = Param::GetInt(Param::udc);
       int udcspnt = Param::GetInt(Param::Voltspnt);
-      int chargeLim = Param::GetInt(Param::CCS_ILim);
+      int chargeLim = (udc > 1) ? (int)(Param::GetFloat(Param::PwrCcsMax) * 1000.0f / udc) : 0;
       chargeLim = MIN(150, chargeLim);
 
       chargeLim = MIN(Param::GetInt(Param::BMS_ChargeLim), chargeLim);//BMS charge current limit for chademo
@@ -228,7 +228,7 @@ void FCChademo::Task200Ms()
    FCChademo::SetSoC(Param::GetFloat(Param::SOCFC));
    Param::SetInt(Param::CCS_Ireq, FCChademo::GetRampedCurrentRequest());
 
-   if (Param::GetInt(Param::CCS_ILim) == 0)
+   if (Param::GetFloat(Param::PwrCcsMax) < 0.1f)
    {
       FCChademo::SetChargeCurrent(0);
       FCChademo::SetEnabled(false);

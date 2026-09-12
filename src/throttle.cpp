@@ -403,8 +403,21 @@ void Throttle::IdcLimitCommand(float& finalSpnt, float idc)
     static float idcFiltered = 0;
     idcFiltered = IIRFILTERF(idcFiltered, idc, 4);
 
-    idcmax = Param::GetFloat(Param::idcmax);//Made dynamic
-    idcmin = Param::GetFloat(Param::idcmin);
+    // Derived from the kW preferences at the present bus voltage, so there is one
+    // place to set a power limit and it governs every inverter, not just the T2C.
+    // Below a plausible bus voltage the conversion is meaningless, so fall back to
+    // idcmax = 0, which the check further down already treats as "no idc limit".
+    float vPack = Param::GetFloat(Param::udc);
+    if (vPack < 50.0f)
+    {
+        idcmax = 0.0f;
+        idcmin = 0.0f;
+    }
+    else
+    {
+        idcmax =  Param::GetFloat(Param::PwrMotMax)   * 1000.0f / vPack;
+        idcmin = -Param::GetFloat(Param::PwrRegenMax) * 1000.0f / vPack;
+    }
 
     uint16_t DerateReason = Param::GetInt(Param::TorqDerate);
 

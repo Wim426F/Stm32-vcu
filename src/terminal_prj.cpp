@@ -29,6 +29,7 @@
 #include "errormessage.h"
 #include "stm32_can.h"
 #include "terminalcommands.h"
+#include "powerLimiter.h"
 
 static void LoadDefaults(Terminal* t, char *arg);
 static void GetAll(Terminal* t, char *arg);
@@ -36,6 +37,8 @@ static void PrintList(Terminal* t, char *arg);
 static void PrintAtr(Terminal* t, char *arg);
 static void PrintSerial(Terminal* t, char *arg);
 static void PrintErrors(Terminal* t, char *arg);
+static void PeDump(Terminal* t, char *arg);
+static void PeReset(Terminal* t, char *arg);
 
 extern const TERM_CMD TermCmds[] =
 {
@@ -54,8 +57,23 @@ extern const TERM_CMD TermCmds[] =
    { "serial", PrintSerial },
    { "errors", PrintErrors },
    { "reset", TerminalCommands::Reset },
+   { "pedump", PeDump },
+   { "pereset", PeReset },
    { NULL, NULL }
 };
+
+static void PeDump(Terminal* t, char *arg)
+{
+   arg = arg;
+   PowerLimiter::DumpTables(t);
+}
+
+static void PeReset(Terminal* t, char *arg)
+{
+   arg = arg;
+   PowerLimiter::ResetTables();
+   fprintf(t, "R_eff tables reset to prefill, queued for save\r\n");
+}
 
 static void PrintList(Terminal* t, char *arg)
 {

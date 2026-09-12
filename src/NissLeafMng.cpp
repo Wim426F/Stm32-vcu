@@ -249,7 +249,7 @@ void NissLeafMng::Task10Ms(int16_t final_torque_request)
         uint16_t VbattSP = Param::GetInt(Param::Voltspnt);
         uint16_t calcBMSpwr=(Vbatt * Param::GetInt(Param::BMS_ChargeLim));//BMS charge current limit but needs to be power for most AC charger types.
 
-        uint8_t OBCpwrSP = (MIN(Param::GetInt(Param::Pwrspnt),calcBMSpwr) / 100) + 0x64;
+        uint8_t OBCpwrSP = (MIN(Param::GetInt(Param::PwrAcMax),calcBMSpwr) / 100) + 0x64;
 
         if (opmode == MOD_CHARGE && Param::GetInt(Param::Chgctrl) == ChargeControl::Enable)
         {

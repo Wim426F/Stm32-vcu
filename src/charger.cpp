@@ -18,7 +18,7 @@ void chargerClass::Send100msMessages(bool ChRun, CanHardware* can)
    uint8_t bytes[8];
    uint16_t HVvolts=Param::GetInt(Param::udc);
    uint16_t HVspnt=Param::GetInt(Param::Voltspnt);
-   uint16_t HVpwr=Param::GetInt(Param::Pwrspnt);
+   uint16_t HVpwr=Param::GetInt(Param::PwrAcMax);
    bytes[0] = Param::GetInt(Param::opmode);//operation mode
    bytes[1] = (HVvolts&0xFF);//HV voltage lowbyte
    bytes[2] = ((HVvolts&0xFF00)>>8);//HV voltage highbyte

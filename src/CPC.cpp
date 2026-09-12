@@ -91,7 +91,7 @@ void CPCClass::handle357(uint32_t data[2])  //Lim data
 
     ACpow = GetInt(Param::ChgEff) *0.01 *  ACpow; //Compensate for charger efficiency
 
-    Param::SetInt(Param::Pwrspnt,ACpow); //write limit to parameter
+    Param::SetInt(Param::PwrAcMax,ACpow); //write limit to parameter
 
 
     if (ChargePort_Plug == 2 || ChargePort_Plug == 3|| ChargePort_Status != 0x00) //Check Plug is inserted

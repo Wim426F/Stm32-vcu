@@ -83,8 +83,10 @@ void teslaCharger::Task100Ms()
    int HVvolts = Param::GetInt(Param::udc);
    int HVspnt = Param::GetInt(Param::Voltspnt);
    
-   // Calculate BMS maximum power (W)
-   float bms_max_power = (float)HVvolts * Param::GetFloat(Param::BMS_ChargeLim);
+   // What the battery can absorb (W). The estimator accounts for cell voltage
+   // headroom and pack temperature; PwrAcMax below is the user's preference and
+   // this can only pull us under it.
+   float bms_max_power = Param::GetFloat(Param::BMS_MaxInput) * 1000.0f;
    
    // Get EVSE current limit: minimum of PilotLim and CableLim
    int evse_max_current = MIN(Param::GetInt(Param::PilotLim), Param::GetInt(Param::CableLim));
@@ -97,7 +99,7 @@ void teslaCharger::Task100Ms()
    float evse_max_power = AC_line_voltage * (float)num_phases * (float)evse_max_current;
    
    // Get user power limit (W)
-   float vcu_userlimit = Param::GetFloat(Param::Pwrspnt);
+   float vcu_userlimit = Param::GetFloat(Param::PwrAcMax);
    
    // Take minimum of all limits
    float final_setpoint = MIN(bms_max_power, evse_max_power);

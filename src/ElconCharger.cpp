@@ -67,7 +67,7 @@ void ElconCharger::Task200Ms()
     {
         HVvolts=Param::GetInt(Param::udc);
         HVspnt=Param::GetInt(Param::Voltspnt);
-        HVpwr=Param::GetInt(Param::Pwrspnt);
+        HVpwr=Param::GetInt(Param::PwrAcMax);
 
         HVcur = Param::GetInt(Param::BMS_ChargeLim);//BMS charge current limit but needs to be power for most AC charger types.
         if(HVcur > 1000)

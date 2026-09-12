@@ -84,8 +84,8 @@ void LeafBMS::DecodeCAN(int id, uint8_t * data)
             //Param::SetFixed(Param::dislim, dislimit / 4);
 
             Param::SetFloat(Param::BMS_ChargeLim, chargelimit);
-            Param::SetInt(Param::BMS_MaxInput, chglimit);
-            Param::SetInt(Param::BMS_MaxOutput, dislimit);
+            //Param::SetInt(Param::BMS_MaxInput, chglimit);
+            //Param::SetInt(Param::BMS_MaxOutput, dislimit);
             break;
         }
         case 0x55B: {
