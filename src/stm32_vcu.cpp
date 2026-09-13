@@ -103,6 +103,7 @@
 #include "V_Classic.h"
 #include "kangoobms.h"
 #include "OutlanderCanHeater.h"
+#include "superman.h"
 #include "OutlanderHeartBeat.h"
 #include "EvControlsT2C.h"
 #include "DilithiumMCU.h"
@@ -172,6 +173,7 @@ static OutlanderInverter outlanderInv;
 static noHeater Heaternone;
 static AmperaHeater amperaHeater;
 static OutlanderCanHeater outlanderCanHeater;
+static Superman supermanHeater;
 static no_Lever NoGearLever;
 static F30_Lever F30GearLever;
 static E65_Lever E65GearLever;
@@ -995,6 +997,9 @@ static void UpdateHeater()
     case HeatType::OutlanderHeater:
         selectedHeater = &outlanderCanHeater;
         OutlanderCAN = true;
+        break;
+    case HeatType::SupermanHeater:
+        selectedHeater = &supermanHeater;
         break;
     }
     //This will call SetCanFilters() via the Clear Callback
