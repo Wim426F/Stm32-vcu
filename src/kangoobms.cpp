@@ -128,7 +128,7 @@ void KangooBMS::Task100Ms() {
    Param::SetFloat(Param::KWh, remainingKHW);
    Param::SetFloat(Param::SOC, stateOfCharge);
    Param::SetFloat(Param::udcsw, batteryVoltage - 30);
-   Param::SetInt(Param::BMS_MaxCharge, maxChargeAllowed);
+   //Param::SetInt(Param::BMS_MaxCharge, maxChargeAllowed);
    //Param::SetInt(Param::BMS_MaxInput, maxInput);
    //Param::SetInt(Param::BMS_MaxOutput, maxOutput);
    Param::SetInt(Param::BMS_Isolation, isolationResistance);

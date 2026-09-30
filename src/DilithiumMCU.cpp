@@ -138,13 +138,13 @@ void DilithiumMCU::Task100Ms()
       Param::SetInt(Param::BMS_Tmax, maxTempC);
       Param::SetFloat(Param::udc2, battVoltage); // udc2 is battery voltage, udc is bus voltage
       Param::SetFloat(Param::udcsw, battVoltage - 15); //Set for precharging based on actual voltage
-      Param::SetFloat(Param::deltaV, deltaV);
+      Param::SetFloat(Param::BMS_Vdelta, deltaV);
       Param::SetFloat(Param::power, power);
       Param::SetFloat(Param::idc, battCurrent);
-      Param::SetFloat(Param::KWh, KWh);
-      Param::SetFloat(Param::BattCap, MaxkWh);
-      Param::SetFloat(Param::AMPh, AMPh);
-      Param::SetFloat(Param::SOC, SOC);
+      //Param::SetFloat(Param::KWh, KWh);
+      //Param::SetFloat(Param::BattCap, MaxkWh);
+      //Param::SetFloat(Param::AMPh, AMPh);
+      //Param::SetFloat(Param::SOC, SOC);
       Param::SetFloat(Param::BMS_Tavg, BMS_Tavg);
    }
    else
@@ -157,11 +157,11 @@ void DilithiumMCU::Task100Ms()
       Param::SetInt(Param::BMS_Tmax, 0);
       Param::SetFloat(Param::udc2, 0);
       Param::SetFloat(Param::udcsw, Param::GetFloat(Param::udcmin)); // not 0 otherwise precharge may succeed at 0v
-      Param::SetFloat(Param::deltaV, 0);
+      Param::SetFloat(Param::BMS_Vdelta, 0);
       Param::SetFloat(Param::power, 0);
       Param::SetFloat(Param::idc, 0);
-      Param::SetFloat(Param::KWh, 0);
-      Param::SetFloat(Param::AMPh, 0);
+      //Param::SetFloat(Param::KWh, 0);
+      //Param::SetFloat(Param::AMPh, 0);
       //Param::SetFloat(Param::SOC, 0); // dont reset SOC to 0, this is to keep fuel sender to BMW correct in car OFF state.
       Param::SetFloat(Param::BMS_Tavg, 0);
       Param::SetFloat(Param::BMS_Isolation, 0);

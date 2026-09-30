@@ -109,6 +109,7 @@
 #include "DilithiumMCU.h"
 #include "hvcu_box.h"
 #include "powerLimiter.h"
+#include "soc_estimator.h"
 
 #define PRINT_JSON 0
 
@@ -329,6 +330,12 @@ static void Ms200Task(void)
         }
 
     }
+    // Stop CCS when above user set limit
+    if(chargeModeDC && Param::GetFloat(Param::SOC) >= Param::GetFloat(Param::CCS_SOCLimit))
+    {
+        RunChg=false;
+        ChgLck=true;
+    }
     if(opmode==MOD_RUN)
     {
         ChgLck=false;//reset charge lockout flag when we drive off
@@ -400,6 +407,7 @@ static void Ms100Task(void)
     selectedCharger->Task100Ms();
     selectedBMS->Task100Ms();
     PowerLimiter::Task100Ms();
+    SocEstimator::Task100Ms();
     selectedInverter->Task100Ms();
     selectedDCDC->Task100Ms();
     selectedShifter->Task100Ms();
@@ -1347,6 +1355,7 @@ extern "C" int main(void)
     tim3_setup(); //For general purpose PWM output
     Param::Change(Param::PARAM_LAST);
     PowerLimiter::Init();
+    SocEstimator::Init();
     DigIo::inv_out.Clear();//inverter power off during bootup
     DigIo::mcp_sby.Clear();//enable can3
 
@@ -1414,6 +1423,7 @@ extern "C" int main(void)
         char c = 0;
         t.Run();
         PowerLimiter::PollPersist();
+        SocEstimator::PollPersist();
         if (sdo.GetPrintRequest() == PRINT_JSON)
         {
             TerminalCommands::PrintParamsJson(&sdo, &c);

@@ -59,5 +59,7 @@
 // Do not reuse PARAM_BLKNUM. Address = FLASH_END - BLKNUM * PAGE.
 #define PE_BLKNUM     5
 #define PE_PAGES      2
+// SOC estimator: one record on the next page below the PE journal.
+#define SOC_BLKNUM    (PE_BLKNUM + PE_PAGES)
 
 #endif // HWDEFS_H_INCLUDED

@@ -51,3 +51,5 @@ test_vcu
 #stm32_vcu.hex
 
 Stm32-vcu-wim.code-workspace
+
+/.kilo

@@ -51,7 +51,7 @@ private:
    static float temp_1, temp_2;
    float motorPower = 0;
    float torque = 0;
-   float idcMotor = 0;
+   float iacMotor = 0;
    int timeoutCounterInv = 0;
    uint8_t actualGear = 7; // DI_gear feedback from 0x118; 7 = SNA until first frame arrives
 };

@@ -81,9 +81,9 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
         Param::SetFloat(Param::INVudc, voltage);
         Param::SetFloat(Param::udc, voltage); // udc is bus voltage, udc2 is battery voltage
         // RearMotorCurrent126: 11|11@1+ (1,0) [0|2047] "A"
-        idcMotor = ((bytes[1] >> 3) | (bytes[2] & 0x1F) << 5);
-        Param::SetFloat(Param::idcMotor, idcMotor);
-        motorPower = (idcMotor * voltage) / 1000.0f; // kW
+        iacMotor = ((bytes[1] >> 3) | (bytes[2] & 0x1F) << 5);
+        Param::SetFloat(Param::iacMotor, iacMotor);
+        motorPower = (iacMotor * voltage) / 1000.0f; // kW
         Param::SetFloat(Param::motorPower, motorPower);
         // Reset timeout
         timeoutCounterInv = (uint8_t)(Param::GetInt(Param::InvTimeout) * 10);
@@ -211,8 +211,8 @@ void EvControlsT2C::Task100Ms()
       voltage = 0;
       Param::SetFloat(Param::INVudc, voltage);
       Param::SetFloat(Param::udc, voltage); // udc is bus voltage, udc2 is battery voltage
-      idcMotor = 0;
-      Param::SetFloat(Param::idcMotor, idcMotor);
+      iacMotor = 0;
+      Param::SetFloat(Param::iacMotor, iacMotor);
       speed = 0;
       Param::SetInt(Param::speed, speed);
       torque = 0;

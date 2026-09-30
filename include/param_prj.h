@@ -27,7 +27,7 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 159
+//Next param id (increase when adding new parameter!): 162
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,       9,      0,      5  ) \
@@ -48,9 +48,11 @@
     PARAM_ENTRY(CAT_SETUP,     CanMapCan,    CAN_DEV,  0,       1,      0,      97 ) \
     PARAM_ENTRY(CAT_SETUP,     DCDCCan,      CAN_DEV,  0,       1,      1,      107 ) \
     PARAM_ENTRY(CAT_SETUP,     HeaterCan,    CAN_DEV,  0,       1,      1,      138 ) \
+    PARAM_ENTRY(CAT_SETUP,     CAN3Speed,    CAN3SPD,  0,       2,      0,      77 ) \
     PARAM_ENTRY(CAT_SETUP,     MotActive,    MotorsAct,0,       3,      0,      129 ) \
     PARAM_ENTRY(CAT_SETUP,     CanTimeout,  "sec",     0,       120,    10,     143 ) \
     PARAM_ENTRY(CAT_SETUP,     InvTimeout,  "sec",     0,       120,    1,      144 ) \
+    PARAM_ENTRY(CAT_SETUP,     BMS_Timeout, "sec",     1,       120,    10,     91 ) \
     PARAM_ENTRY(CAT_SETUP,     PrechargeTimeout,"sec", 1,       10,     2,      145 ) \
     PARAM_ENTRY(CAT_SETUP,     SafetyOverride, ONOFF,  0,       1,      0,      149 ) \
     PARAM_ENTRY(CAT_THROTTLE,  potmin,      "dig",     0,       4095,   0,      7  ) \
@@ -71,6 +73,7 @@
     PARAM_ENTRY(CAT_THROTTLE,  revRegen,     ONOFF,    0,       1,      0,      137 ) \
     PARAM_ENTRY(CAT_THROTTLE,  udcmin,      "V",       0,       1000,   450,    19 ) \
     PARAM_ENTRY(CAT_THROTTLE,  udclim,      "V",       0,       1000,   520,    20 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  udcsw,       "V",       0,       1000,   330,    32 ) \
     PARAM_ENTRY(CAT_THROTTLE,  tmphsmax,    "°C",      50,      150,    85,     23 ) \
     PARAM_ENTRY(CAT_THROTTLE,  tmpmmax,     "°C",      70,      300,    300,    24 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtmax,    "%",       0,       100,    100,    25 ) \
@@ -85,33 +88,31 @@
     PARAM_ENTRY(CAT_CRUISE,    cruisestep,  "rpm",     1,       1000,   200,    29 ) \
     PARAM_ENTRY(CAT_CRUISE,    cruiseramp,  "rpm/100ms",1,      1000,   20,     30 ) \
     PARAM_ENTRY(CAT_CRUISE,    regenlevel,  "",        0,       3,      2,      31 ) \
-    PARAM_ENTRY(CAT_CONTACT,   udcsw,       "V",       0,       1000,   330,    32 ) \
     PARAM_ENTRY(CAT_CONTACT,   cruiselight, ONOFF,     0,       1,      0,      33 ) \
     PARAM_ENTRY(CAT_CONTACT,   errlights,   ERRLIGHTS, 0,       255,    0,      34 ) \
-    PARAM_ENTRY(CAT_COMM,      CAN3Speed,   CAN3SPD,   0,       2,      0,      77 ) \
     PARAM_ENTRY(CAT_CHARGER,   BattCap,     "kWh",     0.1,     250,    22,     38 ) \
     PARAM_ENTRY(CAT_CHARGER,   Voltspnt,    "V",       0,       1000,   395,    40 ) \
     PARAM_ENTRY(CAT_CHARGER,   PwrAcMax,    "W",       0,       12000,  9000,   41 ) \
     PARAM_ENTRY(CAT_CHARGER,   PwrCcsMax,   "kW",      0,       350,    50,     153 ) \
-    PARAM_ENTRY(CAT_CHARGER,   CCS_SOCLim,  "%",       0,       100,    80,     44 ) \
+    PARAM_ENTRY(CAT_CHARGER,   CCS_SOCLimit,"%",       0,       100,    80,     44 ) \
     PARAM_ENTRY(CAT_CHARGER,   SOCFC,       "%",       0,       100,    50,     79 ) \
     PARAM_ENTRY(CAT_CHARGER,   Chgctrl,     CHGCTRL,   0,       2,      0,      45 ) \
-    PARAM_ENTRY(CAT_CHARGER,   ChgAcVolt,   "Vac",     0,       250,    240,    120 ) \
     PARAM_ENTRY(CAT_CHARGER,   ChgEff,     "%",        0,       100,    90,     121) \
     PARAM_ENTRY(CAT_CHARGER,   ConfigFoccci,  ONOFF,   0,       1,      0,      133) \
     PARAM_ENTRY(CAT_DCDC,      DCdc_Type,   DCDCTYPES, 0,       1,      0,      105 ) \
     PARAM_ENTRY(CAT_DCDC,      DCSetPnt,    "V",       9,       15,     14,     106 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_Timeout,  "sec",    1,       120,    10,     91 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_VsagLimit, "V",     2.0,     4.0,    2.5,    154 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_VminLimit, "V",     0,       10,     3.0,    92 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_VmaxLimit, "V",     0,       10,     4.2,    93 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_VdragLimit,"V",     3.5,     4.5,    4.2,    155 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_TminLimit, "°C",    -100,    100,    5,      94 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_TmaxLimit, "°C",    -100,    100,    50,     95 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,       100000, 500,    139 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_VsagLimit, "V",     2.0,     4.0,    2.5,    154 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_VdragLimit,"V",     3.5,     4.5,    4.2,    155 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_Tderate,  "°C",     -100,    100,    40,     156 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_Tderate,   "°C",    -100,    100,    40,     156 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_TderateChg,"°C",    -100,    100,    35,     158 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_PwrHot,   "kW",     0,       100,    15,     157 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,       100000, 500,    139 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_PwrHot,    "kW",    0,       100,    15,     157 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_CapActual, "Ah",    50,      500,    190,    160 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_WhPerKm,   "Wh/km", 50,      500,    130,    161 ) \
     PARAM_ENTRY(CAT_HEATER,    Heater,      HTTYPE,    0,       4,      0,      57 ) \
     PARAM_ENTRY(CAT_HEATER,    Control,     HTCTRL,    0,       2,      0,      58 ) \
     PARAM_ENTRY(CAT_HEATER,    HeatPwr,     "W",       0,       6500,   0,      59 ) \
@@ -168,34 +169,36 @@
     VALUE_ENTRY(udc,           "V",                 2006 ) \
     VALUE_ENTRY(udc2,          "V",                 2007 ) \
     VALUE_ENTRY(udc3,          "V",                 2008 ) \
-    VALUE_ENTRY(deltaV,        "mV",                2009 ) \
     VALUE_ENTRY(INVudc,        "V",                 2010 ) \
     VALUE_ENTRY(power,         "kW",                2011 ) \
     VALUE_ENTRY(motorPower,    "kW",                2110 ) \
     VALUE_ENTRY(maxPower,      "kW",                2108 ) \
     VALUE_ENTRY(chgPsetp,      "kW",                2117 ) \
     VALUE_ENTRY(idc,           "A",                 2012 ) \
-    VALUE_ENTRY(idcMotor,      "A",                 2109 ) \
-    VALUE_ENTRY(derated_idc,   "A",                 2114 ) \
-    VALUE_ENTRY(derated_regen, "A",                 2115 ) \
+    VALUE_ENTRY(iacMotor,      "A",                 2109 ) \
     VALUE_ENTRY(KWh,           "kWh",               2013 ) \
     VALUE_ENTRY(AMPh,          "Ah",                2014 ) \
     VALUE_ENTRY(SOC,           "%",                 2015 ) \
     VALUE_ENTRY(BMS_Vmin,      "mV",                2084 ) \
     VALUE_ENTRY(BMS_Vmax,      "mV",                2085 ) \
+    VALUE_ENTRY(BMS_Vdelta,    "mV",                2009 ) \
+    VALUE_ENTRY(BMS_OcvCell,   "mV",                2123 ) \
     VALUE_ENTRY(BMS_Tavg,      "°C",                2103 ) \
     VALUE_ENTRY(BMS_Tmin,      "°C",                2086 ) \
     VALUE_ENTRY(BMS_Tmax,      "°C",                2087 ) \
-    VALUE_ENTRY(BMS_ChargeLim, "A",                 2088 ) \
+    VALUE_ENTRY(BMS_KmRem,     "km",                2124 ) \
+    VALUE_ENTRY(BMS_CapUsable, "Ah",                2126 ) \
+    VALUE_ENTRY(BMS_KwhUsable, "kWh",               2129 ) \
+    VALUE_ENTRY(BMS_KwhActual, "kWh",               2130 ) \
     VALUE_ENTRY(BMS_MaxInput,  "kW",                2105 ) \
     VALUE_ENTRY(BMS_MaxOutput, "kW",                2106 ) \
-    VALUE_ENTRY(BMS_IchgMax,   "A",                 2118 ) \
     VALUE_ENTRY(BMS_IdisMax,   "A",                 2119 ) \
+    VALUE_ENTRY(BMS_IchgMax,   "A",                 2118 ) \
+    VALUE_ENTRY(BMS_ChargeLim, "A",                 2088 ) \
     VALUE_ENTRY(BMS_Rpack,     "mOhm",              2120 ) \
-    VALUE_ENTRY(BMS_LimSrc,    BMSLIMSRC,           2121 ) \
-    VALUE_ENTRY(BMS_MaxCharge, "W",                 2101 ) \
     VALUE_ENTRY(BMS_Isolation, "Ohm",               2104 ) \
     VALUE_ENTRY(BMS_IsoMeas,   "Ohm/v",             2099 ) \
+    VALUE_ENTRY(BMS_LimSrc,    BMSLIMSRC,           2121 ) \
     VALUE_ENTRY(speed,         "rpm",               2016 ) \
     VALUE_ENTRY(Veh_Speed,     "kph",               2017 ) \
     VALUE_ENTRY(torque,        "Nm",                2018 ) \
@@ -232,6 +235,7 @@
     VALUE_ENTRY(GearFB,        LOWHIGH,             2047 ) \
     VALUE_ENTRY(CableLim,      "A",                 2048 ) \
     VALUE_ENTRY(PilotLim,      "A",                 2049 ) \
+    VALUE_ENTRY(ChgAcVolt,     "Vac",               2128 ) \
     VALUE_ENTRY(PlugDet,       ONOFF,               2050 ) \
     VALUE_ENTRY(PilotTyp,      PLTMODES,            2051 ) \
     VALUE_ENTRY(CCS_I_Avail,   "A",                 2052 ) \
@@ -267,13 +271,8 @@
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
     VALUE_ENTRY(DriverDoorSt,  DMODES,              2112 ) \
 
-//Next value Id: 2122
+//Next value Id: 2131
 
-//Dead params
-/*
-    PARAM_ENTRY(CAT_THROTTLE,  bmslimhigh,  "%",       0,      100,    50,     17 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  bmslimlow,   "%",      -100,    0,     -1,      18 ) \
-*/
 //////////
 
 #define VERSTR STRINGIFY(4=VER)

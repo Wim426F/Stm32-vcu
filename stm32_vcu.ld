@@ -17,12 +17,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Linker script for Olimex STM32-H103 (STM32F103RBT6, 128K flash, 20K RAM). */
+/* Linker script for Olimex STM32-H103 (STM32F103RBT6, 128K flash, 20K RAM).
+ *
+ * Bootloader occupies 4K at 0x08000000. On a 128K part the SOC journal is
+ * the 7th-to-last 2K page (0x0801C800), below PARAM/CAN/PE. 110K from
+ * 0x08001000 ends there so .text cannot overlap it. A 256K F107 places
+ * the same journal at the real top of flash at runtime. */
 
 /* Define memory regions. */
 MEMORY
 {
-	rom (rx)    : ORIGIN = 0x08001000, LENGTH = 112K
+	rom (rx)    : ORIGIN = 0x08001000, LENGTH = 110K
 	ram (rwx)   : ORIGIN = 0x20000000, LENGTH = 20K
 }
 
