@@ -38,7 +38,6 @@ static uint8_t shiftPos=0xe1; //contains byte to display gear position on dash.d
 static uint8_t gear_BA=0x03; //set to park as initial condition
 static uint8_t mthCnt;
 static uint8_t C1D00 = 0x00;  //0x1D0 counter
-static uint8_t C1D01 = 0x00;  //0x1D0 counter
 static uint8_t A80=0xbe;//0x0A8 first counter byte
 static uint8_t A81=0x00;//0x0A8 second counter byte
 static uint8_t A90=0xe9;//0x0A9 first counter byte
@@ -451,7 +450,7 @@ void BMW_E90::Engine_Data()
         EngRun = 0x60;
 
         // Fuel emulation based on power consumption
-        float full_kWh = Param::GetFloat(Param::BattCap);  // Full battery kWh
+        float full_kWh = Param::GetFloat(Param::BMS_KwhUsable);  // Usable kWh from SOC estimator
         float tank_L = FUEL_CAPACITY;    // Tank liters
         float f_kWh_per_L = (tank_L > 0.0f) ? full_kWh / tank_L : 1.0f;  // Avoid div0
 
@@ -497,19 +496,8 @@ void BMW_E90::Engine_Data()
 
     can->Send(0x1D0, bytes, 8);  // Send on CAN
 
-    // Counter logic (4-bit alive counter)
-    if (C1D00 == C1D01)
-    {
-        C1D00++;
-        if (C1D00 == 0x0F)
-        {
-            C1D00 = 0x00;
-        }
-    }
-    else
-    {
-        C1D01 = C1D00;
-    }
+    // CAN alive counter: rolls 0-F each frame in byte 2 low nibble so the dash registers the ECU as live
+    C1D00 = (C1D00 + 1) % 0x0F;
 }
 
 void BMW_E90::SetFuelGauge(float level)
