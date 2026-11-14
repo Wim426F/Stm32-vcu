@@ -549,9 +549,6 @@ static void Ms10Task(void)
     int16_t speed = 0;
     float torquePercent;
     int opmode = Param::GetInt(Param::opmode);
-    static int prevOpmode = -1;
-    const bool enteredOff = (opmode == MOD_OFF && prevOpmode != MOD_OFF);
-    prevOpmode = opmode;
     int stt = STAT_NONE;
     int requestedDirection = Param::GetInt(Param::dir);
     int rollingDirection = 0;
@@ -659,10 +656,6 @@ static void Ms10Task(void)
         initbyCharge=false;
         DigIo::inv_out.Clear();//inverter power off
         IOMatrix::GetPin(IOMatrix::COOLANTPUMP)->Clear();//Coolant pump off if used
-        // Snap to Park once on entry to off (regardless of shifter pos), then let
-        // the shifter own dir so a deliberate Park->Neutral can release it while off.
-        if (enteredOff)
-            Param::SetInt(Param::dir, Park);
         selectedVehicle->DashOff();
         StartSig=false;//reset for next time
 
@@ -780,7 +773,6 @@ static void Ms10Task(void)
         ErrorMessage::UnpostAll();
         // Only leave RUN once it is physically safe to open the contactors:
         //  speed<50  : rotor essentially stopped, back-EMF can't overvolt the inverter (hard interlock)
-        
         //  dir 0/2   : selector in Neutral or Park - driver intent, and redundancy if the speed signal drops out
         if(!selectedVehicle->Ready() &&
            ABS(Param::GetInt(Param::speed)) < 50 &&
@@ -798,7 +790,6 @@ static void Ms10Task(void)
         //the contactors open. Hold here for the wind-down window, then drop to MOD_OFF.
         DigIo::dcsw_out.Set();
         DigIo::inv_out.Clear();//inverter no longer needed
-        Param::SetInt(Param::dir, Park); // shift to park/neutral on shutdown regardless of shifter pos
         if(shutdownReq!=0) shutdownReq--;
         if(shutdownReq==0 && ABS(Param::GetInt(Param::idc)) < 5) //  idc<5 = near-zero DC current, no arc on opening
         {

@@ -39,6 +39,7 @@ bool SportMode = false;
 
 bool DirChanged, ParkChange, SportChange = false;
 bool prevPlugDet = false;
+bool prevT15Stat = false;
 uint8_t PrkCnt = 0;
 
 uint16_t SportNum = 0;
@@ -291,10 +292,10 @@ void F30_Lever::UpdateShifter()
                 DirChanged = true;
             }
             else if (ParkBut == true && ParkChange == false &&
-                     (Param::GetInt(Param::din_brake) || opmodeSh == MOD_OFF))
+                     (Param::GetInt(Param::din_brake) || opmodeSh != MOD_RUN))
             {
-                // Allow releasing Park to Neutral without brake when off, so a
-                // dead/errored car can be pushed even if brake pressure is absent.
+                // Brake only required in RUN, so a dead/errored car can be pushed
+                // even if brake signal is absent.
                 Dir = Neutral;
                 this->gear = NEUTRAL;
                 ParkChange = true;
@@ -319,9 +320,8 @@ void F30_Lever::sendcan()
         DirOut = Drive;
     if (vcuDir == 2)
         DirOut = Park;
-    // Force Park (engages EPB) in every non-run mode except MOD_OFF, where dir is
-    // authoritative (Park by default, Neutral only after a deliberate release).
-    if (opmodeSh != MOD_RUN && opmodeSh != MOD_OFF)
+    // A detected charge plug always forces Park so the EPB can never release while plugged in.
+    if (Param::GetInt(Param::PlugDet))
         DirOut = Park;
     bytes[1] = Cnt3FD;
     bytes[2] = DirOut;
@@ -352,7 +352,8 @@ void F30_Lever::Task10Ms()
 
 void F30_Lever::Task100Ms()
 {
-    if (!Param::GetInt(Param::T15Stat))
+    bool t15Stat = Param::GetInt(Param::T15Stat);
+    if (!t15Stat)
     {
         if (CANcntDwn != 0)
             CANcntDwn--;
@@ -361,16 +362,40 @@ void F30_Lever::Task100Ms()
         CANcntDwn = 20;
     // only talk to shifter when ign is on
 
-    // On rising edge of plug detection, snap to Park. Lever can still be
-    // physically moved out of Park afterwards while plugged in.
+    // Refresh before sendcan so the frame reflects this tick, not the previous one.
+    vcuDir = Param::GetInt(Param::dir);
+    opmodeSh = Param::GetInt(Param::opmode);
     bool plugDet = Param::GetInt(Param::PlugDet);
-    if (plugDet && !prevPlugDet)
+
+    // Park / EPB (EPB engages when 0x3FD byte 2 == Park):
+    //  1. 0x3FD always carries the lever state in every opmode, except plug detected = always Park.
+    //  2. Lever snaps to Park on: VCU boot, car on (T15 rising), car off (entering MOD_OFF), plug in.
+    //  3. Park button releases to Neutral without brake outside MOD_RUN (blocked while plugged in).
+    //
+    //  Case                                      Result
+    //  Key on, normal start, EPB was released    Snaps to P at key-on, stays P through precharge into RUN. No blip.
+    //  Key on, fault (stuck in OFF or PCHFAIL)   P, engaged. Press Park to release for towing; press again to engage.
+    //  Released, then key off                    Stays released (towing).
+    //  Next key on                               P, engaged.
+    //  12 V cycle                                P (boot snap).
+    //  Plug in                                   Always P, no release possible.
+    //  Key off in P                              P throughout.
+    //
+    // T15Stat is held 3s after MOD_OFF, so key back on within that window is not a new car-on.
+    // prevOpmodeSh starts at -1, so boot counts as entering MOD_OFF.
+    bool carOn = t15Stat && !prevT15Stat;
+    bool carOff = opmodeSh == MOD_OFF && prevOpmodeSh != MOD_OFF;
+    bool plugIn = plugDet && !prevPlugDet;
+    if (carOn || carOff || plugIn)
     {
         Dir = Park;
         this->gear = PARK;
-        ParkChange = true;
+        vcuDir = 2; // dir param still holds the old gear until the next SelectDirection
         DirChanged = true;
+        ParkChange = true;
     }
+    prevT15Stat = t15Stat;
+    prevOpmodeSh = opmodeSh;
     prevPlugDet = plugDet;
 
     if (CANcntDwn != 0)
@@ -378,21 +403,6 @@ void F30_Lever::Task100Ms()
         UpdateShifter();
         sendcan();
     }
-
-    vcuDir = Param::GetInt(Param::dir);
-    opmodeSh = Param::GetInt(Param::opmode);
-
-    // On entry into MOD_OFF, snap to Park so shutdown auto-parks and engages the
-    // EPB regardless of the last driving gear. Afterwards the lever runs normally,
-    // so a deliberate Park->Neutral press can still release the EPB while off.
-    if (opmodeSh == MOD_OFF && prevOpmodeSh != MOD_OFF)
-    {
-        Dir = Park;
-        this->gear = PARK;
-        DirChanged = true;
-        ParkChange = true;
-    }
-    prevOpmodeSh = opmodeSh;
 }
 
 bool F30_Lever::GetGear(Shifter::Sgear &outGear)
