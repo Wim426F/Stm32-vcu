@@ -337,13 +337,14 @@ void F30_Lever::sendcan()
     {
         Cnt3FD = 0;
     }
-    if (opmodeSh == MOD_RUN)
-        bytes[0] = 0xFF; // backlight level. Set max as a during Run mode 0xFF.
-    else
-        bytes[0] = 0x00; // Back light off if not in run mode.
-    bytes[1] = 0;
 
-    can->Send(0x202, bytes, 2);
+//    if (opmodeSh == MOD_RUN)
+//        bytes[0] = 0xFF; // backlight level. Set max as a during Run mode 0xFF.
+//    else
+//        bytes[0] = 0x00; // Back light off if not in run mode.
+//    bytes[1] = 0;
+//
+//    can->Send(0x202, bytes, 2);
 }
 
 void F30_Lever::Task10Ms()
