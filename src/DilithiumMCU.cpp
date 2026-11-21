@@ -19,6 +19,7 @@
 
 #include "DilithiumMCU.h"
 #include "errormessage.h"
+#include "my_math.h"
 
 /*
  * This module receives messages from DilithiumMCU and updates the
@@ -42,8 +43,12 @@ bool DilithiumMCU::ChargeAllowed()
    if (timeoutCounterBMS < 1) return false;
 
    // Refuse to charge if the voltage or temperature is out of range.
-   if ((maxCellV/1000.0f) > Param::GetFloat(Param::BMS_VmaxLimit)) return false; // problem
-   if ((minCellV/1000.0f) < Param::GetFloat(Param::BMS_VminLimit)) return false;  // problem
+   // Either limit of each pair may be set inside the other, and the inner one is a normal operating
+   // point, so the hard stops sit at the outer ones.
+   float vHigh = MAX(Param::GetFloat(Param::BMS_VmaxLimit), Param::GetFloat(Param::BMS_VdragLimit));
+   float vLow = MIN(Param::GetFloat(Param::BMS_VminLimit), Param::GetFloat(Param::BMS_VsagLimit));
+   if ((maxCellV/1000.0f) > vHigh) return false;
+   if ((minCellV/1000.0f) < vLow) return false;
    if (maxTempC > Param::GetFloat(Param::BMS_TmaxLimit)) return false;
    if (minTempC < Param::GetFloat(Param::BMS_TminLimit)) return false;
 

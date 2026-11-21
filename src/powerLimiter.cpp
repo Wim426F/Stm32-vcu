@@ -731,6 +731,27 @@ void Task100Ms()
    Learn(in);
    Compute(in);
 
+   /* In charge mode, a hold or a lost BMS means 0 W. NODATA's "no limit" is
+    * for driving only. Every charger obeys BMS_MaxInput, so this gates them all. */
+   int mode = Param::GetInt(Param::opmode);
+   if (mode == MOD_CHARGE && (Param::GetInt(Param::ChgHold) != 0 || !in.haveCells))
+   {
+      pwrChg = 0.0f;
+      iChgMax = 0.0f;
+   }
+
+   /* Highest cell's resting voltage: loaded voltage minus the IR rise of the
+    * charge current. Unsubtracted polarisation only makes it read high, so a
+    * charge that ends on it ends early, never late. */
+   float ocvMax = in.vMaxCell;
+   if (in.idc > 0.0f && in.ah > 1.0f)
+      ocvMax -= in.idc * Lookup(rChg, in.t, in.soc, in.absI / in.ah) * 0.001f / CELLS;
+   Param::SetFloat(Param::BMS_OcvMax, in.haveCells ? ocvMax * 1000.0f : 0.0f);
+
+   /* Pack backstop for the chargers' own voltage target: only reached when
+    * every cell sits at the hard stop. */
+   Param::SetFloat(Param::Voltspnt, MAX(Param::GetFloat(Param::BMS_VmaxLimit), in.vCeil) * CELLS);
+
    Param::SetFloat(Param::BMS_MaxOutput, pwrDis);
    Param::SetFloat(Param::BMS_MaxInput, pwrChg);
    Param::SetFloat(Param::BMS_IdisMax, iDisMax);
@@ -741,7 +762,6 @@ void Task100Ms()
    /* Save on the way out of a live mode. Never on a timer while driving: the
     * page erase in CommitFlash runs with interrupts off and stalls the bus for
     * tens of ms, and the table only moves over weeks anyway. */
-   int mode = Param::GetInt(Param::opmode);
    bool live = (mode == MOD_RUN || mode == MOD_CHARGE);
    bool wasLive = (prevMode == MOD_RUN || prevMode == MOD_CHARGE);
    if (wasLive && !live && dirty)

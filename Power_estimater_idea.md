@@ -30,6 +30,8 @@ Written by `PowerLimiter` only:
 | `BMS_IchgMax` | A | same charge limit as current, informational |
 | `BMS_Rpack` | mΩ | pack R_eff at the present discharge operating point |
 | `BMS_LimSrc` | enum | binding constraint: `None/Sag/Drag/Hot/Cold/NoData` |
+| `BMS_OcvMax` | mV | highest cell's resting voltage estimate, see Charge gate |
+| `Voltspnt` | V | pack voltage target for the chargers, `73 × MAX(BMS_VmaxLimit, BMS_VdragLimit)` |
 
 `BMS_MaxOutput` / `BMS_MaxInput` are the values a BMS is meant to report. The estimator is the missing
 part of the BMS rather than a separate subsystem, so it uses the `BMS_` namespace throughout, and it is
@@ -45,9 +47,19 @@ Battery parameters:
 | `BMS_Tderate` | °C | 40 | hot ramp start |
 | `BMS_PwrHot` | kW | 15 | power held at and above `BMS_TmaxLimit` |
 
-`BMS_VsagLimit` / `BMS_VdragLimit` are deliberately separate from `BMS_VminLimit` / `BMS_VmaxLimit`.
-The latter are resting fault thresholds used by `DilithiumMCU::ChargeAllowed()`; sagging to 2.5 V under
-500 A is normal, resting at 2.5 V is not.
+Each of the four cell voltage limits has one job:
+
+| Param | Meaning | Used by |
+|---|---|---|
+| `BMS_VsagLimit` | absolute minimum under load | discharge floor |
+| `BMS_VminLimit` | resting empty, SOC 0 % | SOC estimator |
+| `BMS_VmaxLimit` | resting full, SOC 100 %, charge target | SOC estimator, charge gate |
+| `BMS_VdragLimit` | absolute maximum under charge current | charge ceiling |
+
+`DilithiumMCU::ChargeAllowed()` refuses charge above `MAX(BMS_VmaxLimit, BMS_VdragLimit)` and below
+`MIN(BMS_VminLimit, BMS_VsagLimit)`. Either limit of each pair may be set inside the other; the inner
+one is a normal operating point, so the hard stop sits at the outer one. A pack driven to 0 % rests
+near `BMS_VminLimit` and can still charge.
 
 User power preferences, all kW. Set in power because that is what the T2C accepts and what a CCS
 session negotiates. The equivalent current is a consequence of pack sag, so it is published as a value
@@ -183,6 +195,37 @@ If `BMS_Vmin`/`BMS_Vmax` are absent (BMS timeout, or a BMS that does not report 
 are set to `PWR_NOLIMIT` (1000 kW) and `BMS_LimSrc = NoData`. Publishing 0 would cut drive power to
 nothing on a momentary CAN dropout, and the T2C faults on a 0 kW limit. The preferences remain in
 force at the consumers.
+
+In `MOD_CHARGE` the charge output is 0 instead: a charge without cell monitoring is not allowed.
+
+## Charge gate
+
+AC and DC share one rule: every charger obeys `BMS_MaxInput`. In `MOD_CHARGE`, `Task100Ms()` sets
+`BMS_MaxInput` and `BMS_IchgMax` to 0 when `ChgHold` is not `None` or there is no cell data. No
+charger needs its own pause code.
+
+`BMS_OcvMax` is `BMS_Vmax − idc × R / 73`, with R from the charge table at the present C-rate, and
+only while charging. The unsubtracted polarisation makes it read high, so a charge that ends on it
+ends early, never late. At the end of a charge the current is lowest, so the R error matters least.
+
+The decision block in `stm32_vcu.cpp` (`Ms200Task`) runs in `MOD_CHARGE` for AC and DC:
+
+| Condition | AC | DC |
+|---|---|---|
+| BMS data valid and `BMS_Tmin` / `BMS_Tmax` outside `BMS_TminLimit` / `BMS_TmaxLimit` | `ChgHold = WaitTemp`, resumes on its own | same |
+| `SOC ≥ ChgSocLimit` or `BMS_OcvMax ≥ BMS_VmaxLimit`, 4 s continuous | `ChgHold = Full`, HV stays live, latched until charge mode ends | end + lockout |
+| BMS charge current 0 for another reason (BMS lost, hard voltage limit), 4 s continuous | end + lockout | same |
+| `udc ≥ Voltspnt`, or the charge stop button | end + lockout | same |
+
+The 4 s is the time the BMS gets to report after the start of charge. The wait is a state, not an
+error: `ChgHold` shows it in the web UI and posts nothing to the error log.
+
+With `BMS_VdragLimit` below `BMS_VmaxLimit`, the ceiling holds the cell below `BMS_VmaxLimit`, so
+`BMS_OcvMax` never reaches it and the charge trickles at the ceiling until stopped. This is
+intentional.
+
+`ChgSocLimit` (ID 44, formerly `CCS_SOCLimit`) applies to AC and DC. SOC follows the weakest cell and
+rarely reaches 100 %, so at 100 % `BMS_OcvMax` usually ends the charge.
 
 ## Output slew
 

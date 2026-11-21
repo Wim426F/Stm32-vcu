@@ -17,7 +17,7 @@ One cell group on this pack holds less charge at the bottom of the curve. The pa
 
 - `f` is the charge of the weakest cell group as a fraction of absolute capacity. `f` is 0 at 2800 mV and 1 at 4200 mV.
 - Coulomb counting moves `f` on every tick outside OFF.
-- At the start of RUN or CHARGE after 30 min in OFF, the start correction sets `f` to the table value.
+- At the start of RUN or CHARGE after 30 min of settle time, the start correction sets `f` to the table value.
 - After a shorter stop or a 15 s rest, the rest correction moves `f` toward the table value.
 - `BMS_VminLimit` and `BMS_VmaxLimit` set the displayed window. They do not change `f` or the learned capacity.
 - The code learns `BMS_CapActual` from discharge between two start corrections and `BMS_WhPerKm` from driving.
@@ -27,7 +27,7 @@ One cell group on this pack holds less charge at the bottom of the curve. The pa
 
 ```
 idc, opmode ----------------------> coulomb count -----> f
-opmode ---------------------------> off time ----------> start correction or rest correction
+opmode, idc ----------------------> settle time -------> start correction or rest correction
 BMS_Vmin, start or rest ----------> OCV table ---------> correction of f
 f, BMS_CapActual, limits ---------> window ------------> SOC, AMPh, KWh, BMS_KmRem
 BMS_Vmin, idc, BMS_Rpack ---------> IR compensation ---> BMS_OcvCell
@@ -49,18 +49,19 @@ f, BMS_CapActual, BMS_WhPerKm ----> record, in OFF only
 
 `Task100Ms()` does these steps in this order:
 
-1. In OFF, the code adds one tick to the off time.
+1. In OFF, the code adds one tick to the settle time.
 2. The code reads `BMS_Vmin`. A value below 1000 is in volts, and the code converts it to mV.
 3. If `BMS_Vmin` is outside the valid range, the code publishes the values from the last `f` and stops the tick.
 4. Outside OFF, coulomb counting updates `f`.
-5. The code updates the rest timer.
-6. The code publishes `BMS_OcvCell`.
-7. The code detects the start of RUN or CHARGE.
-8. The code applies the start correction or the rest correction.
-9. In RUN, the code adds to the Wh/km sum.
-10. The code calculates the displayed window and publishes the values.
+5. Outside OFF, the code updates the settle time from `idc`.
+6. The code updates the rest timer.
+7. The code publishes `BMS_OcvCell`.
+8. The code detects the start of RUN or CHARGE.
+9. The code applies the start correction or the rest correction.
+10. In RUN, the code adds to the Wh/km sum.
+11. The code calculates the displayed window and publishes the values.
 
-Step 1 runs also when `BMS_Vmin` is invalid. Step 7 compares `opmode` with the `opmode` of the last valid tick. A start during invalid `BMS_Vmin` is detected at the first valid tick.
+Step 1 runs also when `BMS_Vmin` is invalid. Step 8 compares `opmode` with the `opmode` of the last valid tick. A start during invalid `BMS_Vmin` is detected at the first valid tick.
 
 | Item | Value |
 |---|---|
@@ -76,27 +77,33 @@ f = f + idc * 0.1 / 3600 / BMS_CapActual
 
 `idc` is positive during charge, so discharge lowers `f`. The code also sums the Ah discharged since the last start correction, for capacity learning.
 
-The contactors are open in OFF, so `idc` in OFF is sensor offset. The code does not count in OFF.
+The contactors are open in OFF, so `idc` in OFF is sensor offset. The code does not count in OFF. Below the settle current, `idc` is mostly sensor offset, so the code does not count. The next start correction removes the error of the skipped current.
 
 | Item | Value |
 |---|---|
 | Tick | 0.1 s |
-| Condition | `opmode` not OFF, `f` known, `BMS_CapActual` at least 50 Ah |
+| Condition | `opmode` not OFF, `idc` at or above 2 A, `f` known, `BMS_CapActual` at least 50 Ah |
 | Range of `f` | 0 to 1 |
 
 ## Start correction
 
-At the start of RUN or CHARGE, the code reads the off time. If the off time is 30 min or more, the code sets `f` to the table value at `BMS_Vmin`. The code then takes a capacity sample.
+At the start of RUN or CHARGE, the code reads the settle time. If the settle time is 30 min or more, the code sets `f` to the table value at `BMS_Vmin`. The code then takes a capacity sample.
 
-The off time counts only in OFF, because the contactors are open and the pack rests. The counter also runs when the BMS sends no data.
+The settle time is the time the pack rests. These conditions add one tick to the settle time:
+
+- `opmode` is OFF. The contactors are open. The counter also runs when the BMS sends no data.
+- `opmode` is not OFF, `BMS_Vmin` is valid, and `idc` is below the settle current. An AC charge hold at 0 W is an example.
+
+Outside OFF, a current at or above the settle current sets the settle time to 0. The settle current is above the zero offset of the current sensor.
 
 | Item | Value |
 |---|---|
-| Minimum off time | 30 min (18000 ticks) |
-| Off time at start-up | 30 min |
-| Off time after a start of RUN or CHARGE | 0 |
+| Minimum settle time | 30 min (18000 ticks) |
+| Settle current, outside OFF | below 2 A |
+| Settle time at start-up | 30 min |
+| Settle time after a start of RUN or CHARGE | 0 |
 
-After a restart during a drive, the record holds a stale `f`. The off time at start-up is 30 min, so the first start correction replaces that `f`.
+After a restart during a drive, the record holds a stale `f`. The settle time at start-up is 30 min, so the first start correction replaces that `f`.
 
 ## Rest correction
 
@@ -105,7 +112,7 @@ A rest correction moves `f` a fixed fraction toward the table value at `BMS_Vmin
 These events apply a rest correction:
 
 - the end of a rest
-- a start of RUN or CHARGE with an off time below 30 min
+- a start of RUN or CHARGE with a settle time below 30 min
 
 | Item | Value |
 |---|---|
@@ -136,7 +143,7 @@ A rest correction takes no sample. After a short rest, `BMS_Vmin` reads low, and
 | Minimum drop in `f` | 0.25 |
 | Tolerance to present value | 30 % |
 | EWMA gain | 0.10 |
-| Default | 190 Ah |
+| Default | 215 Ah |
 
 `BMS_CapActual` is the capacity between 2800 mV and 4200 mV. Pack ageing lowers this value.
 
@@ -154,7 +161,7 @@ A rest correction takes no sample. After a short rest, `BMS_Vmin` reads low, and
 
 ## OCV table
 
-The table maps the rest voltage of the weakest cell group to `f` for the LG INR21700-M50. `f` is the Ah value divided by 190. `TableF()` interpolates linearly and limits the result to 0 to 1. The table has no temperature axis.
+The table maps the rest voltage of the weakest cell group to `f` for the LG INR21700-M50. `f` is the Ah value divided by 215. `TableF()` interpolates linearly and limits the result to 0 to 1. The table has no temperature axis.
 
 | mV | Ah | Source |
 |---|---|---|
@@ -175,13 +182,12 @@ The table maps the rest voltage of the weakest cell group to `f` for the LG INR2
 | 3572 | 57.0 | Rest data from drive logs |
 | 3593 | 65.7 | Rest data from drive logs |
 | 3658 | 85.1 | Rest data from drive logs |
-| 3700 | 93.8 | Linear interpolation, 3658 mV to 4042 mV |
-| 3800 | 114.6 | Linear interpolation, 3658 mV to 4042 mV |
-| 3900 | 135.4 | Linear interpolation, 3658 mV to 4042 mV |
-| 4000 | 156.2 | Linear interpolation, 3658 mV to 4042 mV |
-| 4042 | 164.9 | Rest data from drive logs |
-| 4075 | 180.0 | Rest data from drive logs |
-| 4200 | 190.0 | Sets `f` to 1.0 |
+| 3798 | 118.8 | Rest voltage from drive logs, Ah from the slopes next to the gaps |
+| 3877 | 134.7 | Rest voltage from drive logs, Ah from the slopes next to the gaps |
+| 3937 | 152.3 | Rest voltage from drive logs, Ah from the slopes next to the gaps |
+| 4042 | 189.7 | Rest voltage from drive logs, Ah from the slopes next to the gaps |
+| 4075 | 204.8 | Rest voltage from drive logs, Ah from the slopes next to the gaps |
+| 4200 | 215.0 | Sets `f` to 1.0 |
 
 ## Published values
 
@@ -206,7 +212,7 @@ The nominal pack voltage is 3.7 V times 73 cells. The live pack voltage is not u
 |---|---|---|---|---|
 | `BMS_VminLimit` | param, V | 92 | 3.0 | Lower end of the displayed window |
 | `BMS_VmaxLimit` | param, V | 93 | 4.2 | Upper end of the displayed window |
-| `BMS_CapActual` | param, Ah | 160 | 190 | Learned capacity |
+| `BMS_CapActual` | param, Ah | 160 | 215 | Learned capacity |
 | `BMS_WhPerKm` | param, Wh/km | 161 | 130 | Learned net consumption |
 
 ## Record
@@ -246,4 +252,4 @@ A write erases the page. Interrupts stay disabled during the erase and the write
 | Command | Action |
 |---|---|
 | `socdump` | Prints the record |
-| `socreset` | Sets `BMS_CapActual` to 190 and `BMS_WhPerKm` to 130, clears `f`, writes the record |
+| `socreset` | Sets `BMS_CapActual` to 215 and `BMS_WhPerKm` to 130, clears `f`, writes the record |

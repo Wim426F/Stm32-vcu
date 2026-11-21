@@ -294,48 +294,68 @@ static void Ms200Task(void)
 
 
     ///////////////////////////////////////
-    //Charge term logic for AC charge
+    //Charge term logic, shared by AC and DC
     ///////////////////////////////////////
     /*
-    if we are in charge mode and battV >= setpoint and power is <= termination setpoint
-        Then we end charge.
+    The PowerLimiter publishes 0 charge power while ChgHold is set or the BMS
+    sends no data, and every charger obeys that. This block only decides:
+      temperature out of range -> wait, resume on its own
+      target reached           -> AC holds at 0 W with HV live, DC ends
+      BMS says no otherwise    -> end (BMS lost or hard voltage limit)
     */
-    if(opmode==MOD_CHARGE && !chargeModeDC)
+    enum { HOLD_NONE, HOLD_WAITTEMP, HOLD_FULL }; // matches CHGHOLDS
+    static const int CHG_CONFIRM_TICKS = 20; // 20 x 200 ms = 4 s continuous, also the time the BMS gets to report
+    static int chgHold = HOLD_NONE;
+    static int bmsFaultTicks = 0;
+    static int fullTicks = 0;
+    if(opmode==MOD_CHARGE)
     {
-        if(Param::GetInt(Param::udc)>=Param::GetInt(Param::Voltspnt)) //FIXME: no current-based termination
+        bool bmsValid = Param::GetFloat(Param::BMS_Vmin) > 0; //BMS driver zeroes cell values on timeout
+        bool tempOk = Param::GetFloat(Param::BMS_Tmin) >= Param::GetFloat(Param::BMS_TminLimit) &&
+                      Param::GetFloat(Param::BMS_Tmax) <= Param::GetFloat(Param::BMS_TmaxLimit);
+        // Target: the SOC limit, or the highest cell at rest reaches VmaxLimit
+        bool full = Param::GetFloat(Param::SOC) >= Param::GetFloat(Param::ChgSocLimit) ||
+                    (bmsValid && Param::GetFloat(Param::BMS_OcvMax) >= Param::GetFloat(Param::BMS_VmaxLimit) * 1000.0f);
+
+        if(bmsValid && !tempOk)
+        {
+            if(chgHold == HOLD_NONE) chgHold = HOLD_WAITTEMP;
+            bmsFaultTicks = 0;
+        }
+        else
+        {
+            if(chgHold == HOLD_WAITTEMP) chgHold = HOLD_NONE;
+            bmsFaultTicks = (selectedBMS->MaxChargeCurrent()==0) ? bmsFaultTicks + 1 : 0;
+        }
+
+        fullTicks = full ? fullTicks + 1 : 0;
+        if(fullTicks >= CHG_CONFIRM_TICKS)
+        {
+            if(chargeModeDC)
+            {
+                RunChg=false;//end charge, the station session is over
+                ChgLck=true;
+            }
+            else chgHold = HOLD_FULL; //latched until charge mode ends
+        }
+
+        bool stopButton = IOMatrix::GetPin(IOMatrix::CHARGESTOP) != &DigIo::dummypin &&
+                          IOMatrix::GetPin(IOMatrix::CHARGESTOP)->Get() &&
+                          Param::GetInt(Param::VehLockSt) == 0; //dont allow chgstop button when vehicle locked
+        if(bmsFaultTicks >= CHG_CONFIRM_TICKS || stopButton ||
+           Param::GetInt(Param::udc) >= Param::GetInt(Param::Voltspnt))
         {
             RunChg=false;//end charge
             ChgLck=true;//set charge lockout flag
         }
-        static int wait_for_bms = 20; // 20x 200ms = 10 sec wait time
-        if(selectedBMS->MaxChargeCurrent()==0)//BMS can command an AC charge shutdown if its current limit is 0
-        {
-            if (wait_for_bms > 0) wait_for_bms--; // if we dont wait we get locked out of charge before bms populates max charge current
-            else
-            {
-                RunChg=false;//end charge
-                ChgLck=true;//set charge lockout flag 
-                wait_for_bms = 10;
-            }
-        }
-
-        if (IOMatrix::GetPin(IOMatrix::CHARGESTOP) != &DigIo::dummypin)
-        {
-            //push button in chargeport stops charging
-            if(IOMatrix::GetPin(IOMatrix::CHARGESTOP)->Get() && Param::GetInt(Param::VehLockSt) == 0) //dont allow chgstop button when vehicle locked
-            {
-                RunChg=false;//end charge
-                ChgLck=true;//set charge lockout flag
-            }
-        }
-
     }
-    // Stop CCS when above user set limit
-    if(chargeModeDC && Param::GetFloat(Param::SOC) >= Param::GetFloat(Param::CCS_SOCLimit))
+    else
     {
-        RunChg=false;
-        ChgLck=true;
+        chgHold = HOLD_NONE;
+        bmsFaultTicks = 0;
+        fullTicks = 0;
     }
+    Param::SetInt(Param::ChgHold, chgHold);
     if(opmode==MOD_RUN)
     {
         ChgLck=false;//reset charge lockout flag when we drive off

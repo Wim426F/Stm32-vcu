@@ -29,8 +29,8 @@
 #include <libopencm3/cm3/cortex.h>
 
 /* f = weakest-cell charge fraction (0 at 2.8 V, 1 at 4.2 V). Coulomb count,
- * OCV set at RUN/CHARGE start after 30 min in OFF, small OCV correction at
- * shorter rests. Displayed SOC is VminLimit..VmaxLimit. Flash in OFF. */
+ * OCV set at RUN/CHARGE start after 30 min of settle time, small OCV correction
+ * at shorter rests. Displayed SOC is VminLimit..VmaxLimit. Flash in OFF. */
 
 namespace SocEstimator
 {
@@ -54,7 +54,8 @@ static const float WHKM_MIN = 50.0f;         // flash / learn sanity, matches PA
 static const float WHKM_MAX = 500.0f;
 static const float WHKM_DEF = 130.0f;        // BMS_WhPerKm default
 static const float SPAN_MIN = 0.05f;         // reject a degenerate usable window
-static const uint16_t SETTLE_TICKS = 18000;  // 30 min in OFF: vmin is a settled OCV
+static const uint16_t SETTLE_TICKS = 18000;  // 30 min of settle time: vmin is a settled OCV
+static const float SETTLE_I = 2.0f;          // |idc| below this is rest: no counting, settle time runs. Above the sensor offset
 
 /* LG INR21700-M50. Ah column / CAP_DEF so f is pack-size independent.
    Ah of 3798 to 4075 mV placed from the slopes on each side of the two gaps. */
@@ -113,7 +114,7 @@ static float winLow, winSpan = 1.0f;  // usable window in f
 static float counted;            // Ah out since last settled start
 static uint16_t restTicks;
 static bool anchorTaken;         // already corrected this rest
-static uint16_t offTicks = SETTLE_TICKS;  // time in OFF; boot counts as settled, flash f may be stale
+static uint16_t offTicks = SETTLE_TICKS;  // settle time; boot counts as settled, flash f may be stale
 static int prevMode;
 static float prevF;              // table f at previous settled start, for capacity
 static bool prevValid;
@@ -244,15 +245,25 @@ void Task100Ms()
 
    /* Coulomb count. idc is charge-positive, so dAh > 0 charges the pack.
     * counted is Ah out: discharge makes dAh negative, so -= increases it.
-    * Not in OFF: contactors are open, any idc there is sensor offset. */
+    * Not in OFF: contactors are open, any idc there is sensor offset. Not
+    * below SETTLE_I: that is mostly offset too, and would drift f over a
+    * long charge hold. The next settled start corrects what this skips. */
    float cap = Param::GetFloat(Param::BMS_CapActual);
    float idc = Param::GetFloat(Param::idc);
-   if (mode != MOD_OFF && f >= 0.0f && cap >= CAP_MIN)
+   if (mode != MOD_OFF && f >= 0.0f && cap >= CAP_MIN && fabsf(idc) >= SETTLE_I)
    {
       float dAh = idc * TICK_S / 3600.0f;   // A * s / 3600 = Ah this tick
       f += dAh / cap;                       // fraction of absolute capacity
       counted -= dAh;
       f = MAX(MIN(f, 1.0f), 0.0f);
+   }
+
+   /* Outside OFF, a near-zero current also settles the pack, e.g. an AC charge
+    * hold at 0 W. 2 A is about 0.01C: 1-2 mV off the true OCV. */
+   if (mode != MOD_OFF)
+   {
+      if (fabsf(idc) >= SETTLE_I) offTicks = 0;
+      else if (offTicks < SETTLE_TICKS) offTicks++;
    }
 
    /* Rest = |idc| < REST_I for REST_TICKS. Load resets the timer. */
@@ -273,7 +284,7 @@ void Task100Ms()
    bool started = live && prevMode != MOD_RUN && prevMode != MOD_CHARGE;
    prevMode = mode;
 
-   /* After 30 min in OFF, vmin is a settled OCV: set f and take a capacity
+   /* After 30 min of settle time, vmin is a settled OCV: set f and take a capacity
     * sample. A shorter stop or a 15 s rest still sags 20-40 mV, so it only
     * moves f GAIN_REST toward the table (sets it if f is unknown), once per rest. */
    float fNow = TableF(vmin);

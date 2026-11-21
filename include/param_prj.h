@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.30.WIM.13
+#define VER 2.30.WIM.14
 
 
 /* Entries must be ordered as follows:
@@ -91,10 +91,9 @@
     PARAM_ENTRY(CAT_CONTACT,   cruiselight, ONOFF,     0,       1,      0,      33 ) \
     PARAM_ENTRY(CAT_CONTACT,   errlights,   ERRLIGHTS, 0,       255,    0,      34 ) \
     PARAM_ENTRY(CAT_CHARGER,   BattCap,     "kWh",     0.1,     250,    22,     38 ) \
-    PARAM_ENTRY(CAT_CHARGER,   Voltspnt,    "V",       0,       1000,   395,    40 ) \
     PARAM_ENTRY(CAT_CHARGER,   PwrAcMax,    "W",       0,       12000,  9000,   41 ) \
     PARAM_ENTRY(CAT_CHARGER,   PwrCcsMax,   "kW",      0,       350,    50,     153 ) \
-    PARAM_ENTRY(CAT_CHARGER,   CCS_SOCLimit,"%",       0,       100,    80,     44 ) \
+    PARAM_ENTRY(CAT_CHARGER,   ChgSocLimit, "%",       0,       100,    100,    44 ) \
     PARAM_ENTRY(CAT_CHARGER,   SOCFC,       "%",       0,       100,    50,     79 ) \
     PARAM_ENTRY(CAT_CHARGER,   Chgctrl,     CHGCTRL,   0,       2,      0,      45 ) \
     PARAM_ENTRY(CAT_CHARGER,   ChgEff,     "%",        0,       100,    90,     121) \
@@ -111,7 +110,7 @@
     PARAM_ENTRY(CAT_BMS,       BMS_TderateChg,"°C",    -100,    100,    35,     158 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,       100000, 500,    139 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_PwrHot,    "kW",    0,       100,    15,     157 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_CapActual, "Ah",    50,      500,    190,    160 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_CapActual, "Ah",    50,      500,    215,    160 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_WhPerKm,   "Wh/km", 50,      500,    130,    161 ) \
     PARAM_ENTRY(CAT_HEATER,    Heater,      HTTYPE,    0,       4,      0,      57 ) \
     PARAM_ENTRY(CAT_HEATER,    Control,     HTCTRL,    0,       2,      0,      58 ) \
@@ -162,6 +161,8 @@
     VALUE_ENTRY(version,       VERSTR,              2000 ) \
     VALUE_ENTRY(opmode,        OPMODES,             2002 ) \
     VALUE_ENTRY(chgtyp,        CHGTYPS,             2003 ) \
+    VALUE_ENTRY(ChgHold,       CHGHOLDS,            2131 ) \
+    VALUE_ENTRY(Voltspnt,      "V",                 2132 ) \
     VALUE_ENTRY(lasterr,       errorListString,     2004 ) \
     VALUE_ENTRY(status,        STATUS,              2005 ) \
 	VALUE_ENTRY(CanAct,        ONOFF,               2107 ) \
@@ -183,6 +184,7 @@
     VALUE_ENTRY(BMS_Vmax,      "mV",                2085 ) \
     VALUE_ENTRY(BMS_Vdelta,    "mV",                2009 ) \
     VALUE_ENTRY(BMS_OcvCell,   "mV",                2123 ) \
+    VALUE_ENTRY(BMS_OcvMax,    "mV",                2133 ) \
     VALUE_ENTRY(BMS_Tavg,      "°C",                2103 ) \
     VALUE_ENTRY(BMS_Tmin,      "°C",                2086 ) \
     VALUE_ENTRY(BMS_Tmax,      "°C",                2087 ) \
@@ -271,7 +273,7 @@
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
     VALUE_ENTRY(DriverDoorSt,  DMODES,              2112 ) \
 
-//Next value Id: 2131
+//Next value Id: 2134
 
 //////////
 
@@ -295,6 +297,7 @@
 #define OPMODES      "0=Off, 1=Run, 2=Precharge, 3=PchFail, 4=Charge, 5=ShutdownReq"
 #define DOW          "0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat"
 #define CHGTYPS      "0=Off, 1=AC, 2=DCFC"
+#define CHGHOLDS     "0=None, 1=WaitTemp, 2=Full"
 #define DCDCTYPES    "0=NoDCDC, 1=TeslaG2"
 #define STATUS       "0=None, 1=UdcLow, 2=UdcHigh, 4=UdcBelowUdcSw, 8=UdcLim, 16=EmcyStop, 32=MProt, 64=PotPressed, 128=TmpHs, 256=WaitStart, 512=IsoFault"
 #define CCS_STATUS   "0=NotRdy, 1=ready, 2=SWoff, 3=interruption, 4=Prech, 5=insulmon, 6=estop, 7=malfunction, 15=invalid"
