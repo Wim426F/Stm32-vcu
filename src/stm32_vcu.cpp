@@ -406,8 +406,8 @@ static void Ms100Task(void)
     selectedVehicle->Task100Ms();
     selectedCharger->Task100Ms();
     selectedBMS->Task100Ms();
-    PowerLimiter::Task100Ms();
     SocEstimator::Task100Ms();
+    PowerLimiter::Task100Ms();
     selectedInverter->Task100Ms();
     selectedDCDC->Task100Ms();
     selectedShifter->Task100Ms();

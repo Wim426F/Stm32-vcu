@@ -431,15 +431,9 @@ void PollPersist()
 {
    if (!persistWanted) return;
 
-   /* Only one thing sets persistWanted on a normal drive: the live -> not-live
-    * transition in Task100Ms, so this runs once per journey. The guard below is
-    * not a second trigger - it is a refusal, for the one other caller
-    * (ResetTables, from the pereset command) which can fire at any time. Erasing
-    * a page stops the bus for tens of ms, so defer it to shutdown by leaving the
-    * flag set. The normal trigger is never blocked: by the time it fires, opmode
-    * has already left RUN/CHARGE. */
-   int mode = Param::GetInt(Param::opmode);
-   if (mode == MOD_RUN || mode == MOD_CHARGE) return;
+   /* Erasing a page stalls the bus for tens of ms with IRQs off. Only in OFF,
+    * contactors open; until then the flag stays set and the write waits. */
+   if (Param::GetInt(Param::opmode) != MOD_OFF) return;
 
    persistWanted = false;
    /* Clear before writing, not after: anything the scheduler learns while the

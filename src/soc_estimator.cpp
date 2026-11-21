@@ -28,8 +28,9 @@
 #include <libopencm3/stm32/iwdg.h>
 #include <libopencm3/cm3/cortex.h>
 
-/* f = weakest-cell charge fraction (0 at 2.8 V, 1 at 4.2 V). Coulomb count
- * plus 15 s rest OCV. Displayed SOC is VminLimit..VmaxLimit. Flash on shutdown. */
+/* f = weakest-cell charge fraction (0 at 2.8 V, 1 at 4.2 V). Coulomb count,
+ * OCV set at RUN/CHARGE start after 30 min in OFF, small OCV correction at
+ * shorter rests. Displayed SOC is VminLimit..VmaxLimit. Flash in OFF. */
 
 namespace SocEstimator
 {
@@ -45,7 +46,7 @@ static const float CAP_MIN_DF = 0.25f;       // need this much Δf to size the p
 static const float CAP_TOL = 0.30f;          // reject sample >30% off current cap
 static const float CAP_MIN = 50.0f;          // flash / learn sanity, matches PARAM
 static const float CAP_MAX = 500.0f;
-static const float CAP_DEF = 190.0f;         // BMS_CapActual default
+static const float CAP_DEF = 215.0f;         // BMS_CapActual default, Ah at 4200 mV in the table
 static const float WHKM_ALPHA = 0.20f;       // EWMA on a 20 km window
 static const float WHKM_KM = 20.0f;
 static const float WHKM_VMIN = 5.0f;         // skip idle
@@ -53,13 +54,15 @@ static const float WHKM_MIN = 50.0f;         // flash / learn sanity, matches PA
 static const float WHKM_MAX = 500.0f;
 static const float WHKM_DEF = 130.0f;        // BMS_WhPerKm default
 static const float SPAN_MIN = 0.05f;         // reject a degenerate usable window
+static const uint16_t SETTLE_TICKS = 18000;  // 30 min in OFF: vmin is a settled OCV
 
-/* LG INR21700-M50. Ah column / CAP_DEF so f is pack-size independent. */
-static const int N_OCV = 24;
+/* LG INR21700-M50. Ah column / CAP_DEF so f is pack-size independent.
+   Ah of 3798 to 4075 mV placed from the slopes on each side of the two gaps. */
+static const int N_OCV = 23;
 static const uint16_t OCV_MV[N_OCV] = {
    2800, 2956, 3038, 3118, 3134, 3167, 3228, 3255, 3281, 3335, 3360, 3368,
    3509, 3542, 3572, 3593, 3658,                       // measured
-   3700, 3800, 3900, 4000,                             // interpolated
+   3798, 3877, 3937,                                   // measured, 15.92 Ah and 17.57 Ah apart
    4042, 4075,                                         // measured, 15.07 Ah apart
    4200                                                // estimated
 };
@@ -67,8 +70,8 @@ static const float OCV_F[N_OCV] = {
    0,         1.6f/CAP_DEF,  2.6f/CAP_DEF,  3.6f/CAP_DEF,  4.6f/CAP_DEF,  5.6f/CAP_DEF,
    6.6f/CAP_DEF, 7.6f/CAP_DEF,  9.6f/CAP_DEF,  10.6f/CAP_DEF, 11.6f/CAP_DEF, 12.1f/CAP_DEF,
    36.3f/CAP_DEF, 45.6f/CAP_DEF, 57.0f/CAP_DEF, 65.7f/CAP_DEF, 85.1f/CAP_DEF,
-   93.8f/CAP_DEF, 114.6f/CAP_DEF, 135.4f/CAP_DEF, 156.2f/CAP_DEF,
-   164.9f/CAP_DEF, 180.0f/CAP_DEF,
+   118.8f/CAP_DEF, 134.7f/CAP_DEF, 152.3f/CAP_DEF,
+   189.7f/CAP_DEF, 204.8f/CAP_DEF,
    1.0f
 };
 
@@ -107,11 +110,12 @@ static uint32_t RecordCrc(const SocRecord* r)
 
 static float f = -1.0f;          // -1 = no estimate
 static float winLow, winSpan = 1.0f;  // usable window in f
-static float counted;            // Ah out since last rest
+static float counted;            // Ah out since last settled start
 static uint16_t restTicks;
-static bool anchorTaken;         // already blended this rest
+static bool anchorTaken;         // already corrected this rest
+static uint16_t offTicks = SETTLE_TICKS;  // time in OFF; boot counts as settled, flash f may be stale
 static int prevMode;
-static float prevF;              // f at previous rest, for capacity
+static float prevF;              // table f at previous settled start, for capacity
 static bool prevValid;
 static float whAcc, kmAcc;       // 20 km Wh/km window
 static float storedCap, storedWhk, storedF = -1.0f;  // last flash commit
@@ -168,11 +172,10 @@ static void Commit()
    storedF = ram.f;
 }
 
-/* one correction per rest; a current of 6 A or more ends the rest*/
+/* Only in OFF: contactors open. The erase stalls the bus with IRQs off. */
 void PollPersist()
 {
-   int mode = Param::GetInt(Param::opmode);
-   if (mode == MOD_RUN || mode == MOD_CHARGE) return;  // never erase while live
+   if (Param::GetInt(Param::opmode) != MOD_OFF) return;
    float cap = Param::GetFloat(Param::BMS_CapActual);
    float whk = Param::GetFloat(Param::BMS_WhPerKm);
    if (fabsf(cap - storedCap) <= 0.5f && fabsf(whk - storedWhk) <= 2.0f
@@ -181,7 +184,7 @@ void PollPersist()
    Commit();
 }
 
-/* Capacity = Ah discharged / Δf between two rest OCVs.
+/* Capacity = Ah discharged / Δf between two settled starts (30 min in OFF).
  * Only on discharge (counted > 0, f dropped). Sample must span CAP_MIN_DF
  * and land within CAP_TOL of the current estimate, then EWMA in. */
 static void LearnCapacity(float fNow, float cap)
@@ -192,7 +195,7 @@ static void LearnCapacity(float fNow, float cap)
       if (capNew > cap * (1.0f - CAP_TOL) && capNew < cap * (1.0f + CAP_TOL))
          Param::SetFloat(Param::BMS_CapActual, cap + CAP_ALPHA * (capNew - cap));
    }
-   prevF = f;          // this rest becomes the next pair's start
+   prevF = fNow;       // this rest's OCV becomes the next pair's start
    prevValid = true;
    counted = 0.0f;
 }
@@ -200,6 +203,11 @@ static void LearnCapacity(float fNow, float cap)
 /* SOC, remaining Ah/kWh/km, usable and actual capacity. */
 static void Publish()
 {
+   /* Driver-empty / driver-full in f. Degenerate limit settings keep the old window. */
+   float fL = TableF(Param::GetFloat(Param::BMS_VminLimit) * 1000.0f);
+   float fH = TableF(Param::GetFloat(Param::BMS_VmaxLimit) * 1000.0f);
+   if (fH - fL > SPAN_MIN) { winLow = fL; winSpan = fH - fL; }
+
    float cap = Param::GetFloat(Param::BMS_CapActual);
    float kwhScale = V_NOM / 1000.0f;   // nominal pack V, not live udc
    float ahUsable = winSpan * cap;
@@ -218,36 +226,28 @@ static void Publish()
    Param::SetFloat(Param::SOC, MAX(MIN(100.0f * (f - winLow) / winSpan, 100.0f), 0.0f));  // 0% at VminLimit
 }
 
-/* Coulomb count, rest OCV blend, Wh/km learn, publish. */
+/* Coulomb count, OCV correction, Wh/km learn, publish. */
 void Task100Ms()
 {
    int mode = Param::GetInt(Param::opmode);
-   bool live = (mode == MOD_RUN || mode == MOD_CHARGE);
-   /* New RUN/CHARGE: allow one rest OCV this session. If already sat 30 s
-    * in OFF, keep restTicks so key-on can blend immediately. */
-   if (live && prevMode != MOD_RUN && prevMode != MOD_CHARGE)
-   {
-      anchorTaken = false;
-      if (restTicks < REST_TICKS) restTicks = 0;
-   }
-   prevMode = mode;
+   /* Contactors are open in OFF, so time in OFF is rest time, also while the BMS sleeps. */
+   if (mode == MOD_OFF && offTicks < SETTLE_TICKS) offTicks++;
 
    /* Weakest cell. Dilithium publishes mV; some BMS send volts. */
    float vmin = Param::GetFloat(Param::BMS_Vmin);
    if (vmin < 1000.0f) vmin *= 1000.0f;
    if (vmin < 1500.0f || vmin > 4500.0f)
-      return;   // hold last published SOC
-
-   /* Driver-empty / driver-full in f. Degenerate limit settings keep the old window. */
-   float fL = TableF(Param::GetFloat(Param::BMS_VminLimit) * 1000.0f);
-   float fH = TableF(Param::GetFloat(Param::BMS_VmaxLimit) * 1000.0f);
-   if (fH - fL > SPAN_MIN) { winLow = fL; winSpan = fH - fL; }
+   {
+      Publish();   // keep showing f so the dash never drops to 0
+      return;
+   }
 
    /* Coulomb count. idc is charge-positive, so dAh > 0 charges the pack.
-    * counted is Ah out: discharge makes dAh negative, so -= increases it. */
+    * counted is Ah out: discharge makes dAh negative, so -= increases it.
+    * Not in OFF: contactors are open, any idc there is sensor offset. */
    float cap = Param::GetFloat(Param::BMS_CapActual);
    float idc = Param::GetFloat(Param::idc);
-   if (f >= 0.0f && cap >= CAP_MIN)
+   if (mode != MOD_OFF && f >= 0.0f && cap >= CAP_MIN)
    {
       float dAh = idc * TICK_S / 3600.0f;   // A * s / 3600 = Ah this tick
       f += dAh / cap;                       // fraction of absolute capacity
@@ -267,14 +267,28 @@ void Task100Ms()
       ocv = vmin - idc * rpack / CELLS;
    Param::SetFloat(Param::BMS_OcvCell, ocv);
 
-   /* 30 s rest: vmin ≈ OCV. Snap if we have no f, else GAIN_REST blend. */
-   if (restTicks >= REST_TICKS && !anchorTaken)
+   /* Start of RUN or CHARGE. prevMode only moves on valid ticks, so a BMS that
+    * answers late still gets the start check on its first valid vmin. */
+   bool live = (mode == MOD_RUN || mode == MOD_CHARGE);
+   bool started = live && prevMode != MOD_RUN && prevMode != MOD_CHARGE;
+   prevMode = mode;
+
+   /* After 30 min in OFF, vmin is a settled OCV: set f and take a capacity
+    * sample. A shorter stop or a 15 s rest still sags 20-40 mV, so it only
+    * moves f GAIN_REST toward the table (sets it if f is unknown), once per rest. */
+   float fNow = TableF(vmin);
+   if (started && offTicks >= SETTLE_TICKS)
    {
-      float fNow = TableF(vmin);
-      f = (f < 0.0f) ? fNow : f * (1.0f - GAIN_REST) + fNow * GAIN_REST;
+      f = fNow;
       LearnCapacity(fNow, cap);
       anchorTaken = true;
    }
+   else if ((started || restTicks >= REST_TICKS) && !anchorTaken)
+   {
+      f = (f < 0.0f) ? fNow : f * (1.0f - GAIN_REST) + fNow * GAIN_REST;
+      anchorTaken = true;
+   }
+   if (started) offTicks = 0;
 
    /* Net pack Wh per km while moving. -idc so regen credits. */
    if (mode == MOD_RUN)
@@ -300,10 +314,11 @@ void Task100Ms()
    Publish();
 }
 
-/* Load flash only. First Task100Ms fills the window and publishes. */
+/* Publish straight from flash so the dash has SOC before the BMS wakes. */
 void Init()
 {
    LoadFromFlash();
+   Publish();
 }
 
 void DumpRecord(IPutChar* out)

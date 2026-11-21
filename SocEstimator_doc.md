@@ -16,30 +16,32 @@ One cell group on this pack holds less charge at the bottom of the curve. The pa
 ## Principle
 
 - `f` is the charge of the weakest cell group as a fraction of absolute capacity. `f` is 0 at 2800 mV and 1 at 4200 mV.
-- Coulomb counting moves `f` on every tick.
-- At the end of a rest, the OCV table corrects `f`.
+- Coulomb counting moves `f` on every tick outside OFF.
+- At the start of RUN or CHARGE after 30 min in OFF, the start correction sets `f` to the table value.
+- After a shorter stop or a 15 s rest, the rest correction moves `f` toward the table value.
 - `BMS_VminLimit` and `BMS_VmaxLimit` set the displayed window. They do not change `f` or the learned capacity.
-- The code learns `BMS_CapActual` from discharge between rests and `BMS_WhPerKm` from driving.
+- The code learns `BMS_CapActual` from discharge between two start corrections and `BMS_WhPerKm` from driving.
 - `f`, `BMS_CapActual` and `BMS_WhPerKm` stay in flash across power cycles.
 
 ## Data flow
 
 ```
-idc ------------------------------> coulomb count -----> f
-BMS_Vmin, rest -------------------> OCV table ---------> correction of f
+idc, opmode ----------------------> coulomb count -----> f
+opmode ---------------------------> off time ----------> start correction or rest correction
+BMS_Vmin, start or rest ----------> OCV table ---------> correction of f
 f, BMS_CapActual, limits ---------> window ------------> SOC, AMPh, KWh, BMS_KmRem
 BMS_Vmin, idc, BMS_Rpack ---------> IR compensation ---> BMS_OcvCell
 udc2, idc, Veh_Speed -------------> 20 km window ------> BMS_WhPerKm
-f, BMS_CapActual, BMS_WhPerKm ----> record, outside RUN and CHARGE
+f, BMS_CapActual, BMS_WhPerKm ----> record, in OFF only
 ```
 
 ## Functions
 
 | Function | Rate | Action |
 |---|---|---|
-| `Init()` | start-up | Loads the record |
-| `Task100Ms()` | 100 ms, after `PowerLimiter::Task100Ms()` | Counts the charge, corrects `f`, learns, publishes |
-| `PollPersist()` | main loop | Writes the record outside RUN and CHARGE |
+| `Init()` | start-up | Loads the record, publishes the values |
+| `Task100Ms()` | 100 ms, before `PowerLimiter::Task100Ms()` | Counts the charge, corrects `f`, learns, publishes |
+| `PollPersist()` | main loop | Writes the record in OFF |
 | `DumpRecord()` | terminal | Prints `f`, `BMS_CapActual` and `BMS_WhPerKm` |
 | `ResetRecord()` | terminal | Sets the defaults, clears `f`, writes the record |
 
@@ -47,16 +49,18 @@ f, BMS_CapActual, BMS_WhPerKm ----> record, outside RUN and CHARGE
 
 `Task100Ms()` does these steps in this order:
 
-1. At the start of RUN or CHARGE, the code clears the correction flag. It keeps a completed rest timer.
+1. In OFF, the code adds one tick to the off time.
 2. The code reads `BMS_Vmin`. A value below 1000 is in volts, and the code converts it to mV.
-3. If `BMS_Vmin` is outside the valid range, the tick stops. The published values hold.
-4. The code calculates the displayed window.
-5. Coulomb counting updates `f`.
-6. The code updates the rest timer.
-7. The code publishes `BMS_OcvCell`.
-8. At the end of a rest, the code corrects `f` and takes a capacity sample.
+3. If `BMS_Vmin` is outside the valid range, the code publishes the values from the last `f` and stops the tick.
+4. Outside OFF, coulomb counting updates `f`.
+5. The code updates the rest timer.
+6. The code publishes `BMS_OcvCell`.
+7. The code detects the start of RUN or CHARGE.
+8. The code applies the start correction or the rest correction.
 9. In RUN, the code adds to the Wh/km sum.
-10. The code publishes the values.
+10. The code calculates the displayed window and publishes the values.
+
+Step 1 runs also when `BMS_Vmin` is invalid. Step 7 compares `opmode` with the `opmode` of the last valid tick. A start during invalid `BMS_Vmin` is detected at the first valid tick.
 
 | Item | Value |
 |---|---|
@@ -70,17 +74,38 @@ Each tick adds the charge of that tick, divided by `BMS_CapActual`, to `f`:
 f = f + idc * 0.1 / 3600 / BMS_CapActual
 ```
 
-`idc` is positive during charge, so discharge lowers `f`. The code also sums the Ah discharged since the last rest, for capacity learning.
+`idc` is positive during charge, so discharge lowers `f`. The code also sums the Ah discharged since the last start correction, for capacity learning.
+
+The contactors are open in OFF, so `idc` in OFF is sensor offset. The code does not count in OFF.
 
 | Item | Value |
 |---|---|
 | Tick | 0.1 s |
-| Condition | `f` known, `BMS_CapActual` at least 50 Ah |
+| Condition | `opmode` not OFF, `f` known, `BMS_CapActual` at least 50 Ah |
 | Range of `f` | 0 to 1 |
+
+## Start correction
+
+At the start of RUN or CHARGE, the code reads the off time. If the off time is 30 min or more, the code sets `f` to the table value at `BMS_Vmin`. The code then takes a capacity sample.
+
+The off time counts only in OFF, because the contactors are open and the pack rests. The counter also runs when the BMS sends no data.
+
+| Item | Value |
+|---|---|
+| Minimum off time | 30 min (18000 ticks) |
+| Off time at start-up | 30 min |
+| Off time after a start of RUN or CHARGE | 0 |
+
+After a restart during a drive, the record holds a stale `f`. The off time at start-up is 30 min, so the first start correction replaces that `f`.
 
 ## Rest correction
 
-At the end of each rest, the code reads the table value at `BMS_Vmin`. If flash holds no `f`, the table value sets `f`. Otherwise `f` moves a fixed fraction toward the table value.
+A rest correction moves `f` a fixed fraction toward the table value at `BMS_Vmin`. If `f` is unknown, the rest correction sets `f` to the table value. A rest correction takes no capacity sample.
+
+These events apply a rest correction:
+
+- the end of a rest
+- a start of RUN or CHARGE with an off time below 30 min
 
 | Item | Value |
 |---|---|
@@ -89,11 +114,11 @@ At the end of each rest, the code reads the table value at `BMS_Vmin`. If flash 
 | Correction gain | 0.03 |
 | Corrections per rest | 1 |
 
-A current at or above the rest current ends the rest. If the pack rested before the start of RUN or CHARGE, the first tick applies the correction.
+After a short stop, `BMS_Vmin` is below the settled rest voltage, so the gain is small. A current at or above the rest current ends the rest. A start correction is also the correction of that rest.
 
 ## Displayed window
 
-The code maps `BMS_VminLimit` and `BMS_VmaxLimit` through the OCV table on every tick. The limits are in volts. `SOC` is 0 at `BMS_VminLimit` and 100 at `BMS_VmaxLimit`.
+The code maps `BMS_VminLimit` and `BMS_VmaxLimit` through the OCV table at each publish. The limits are in volts. `SOC` is 0 at `BMS_VminLimit` and 100 at `BMS_VmaxLimit`.
 
 | Item | Value |
 |---|---|
@@ -102,7 +127,9 @@ The code maps `BMS_VminLimit` and `BMS_VmaxLimit` through the OCV table on every
 
 ## Capacity learning
 
-A capacity sample is the Ah discharged between two consecutive rests, divided by the drop in `f`. Every rest starts a new sample. The sample pair is in RAM, so a restart starts a new pair.
+A capacity sample is the Ah discharged between two consecutive start corrections, divided by the drop in `f`. Every start correction starts a new sample. The sample pair is in RAM, so a restart starts a new pair.
+
+A rest correction takes no sample. After a short rest, `BMS_Vmin` reads low, and the full error goes into the drop in `f`.
 
 | Item | Value |
 |---|---|
@@ -171,6 +198,8 @@ The table maps the rest voltage of the weakest cell group to `f` for the LG INR2
 
 The nominal pack voltage is 3.7 V times 73 cells. The live pack voltage is not used. The code publishes `BMS_CapUsable`, `BMS_KwhUsable` and `BMS_KwhActual` also when `f` is unknown.
 
+`Init()` publishes the values from the record. When `BMS_Vmin` is invalid, the code publishes the values from the last `f`. `SOC` never drops to 0 because of missing BMS data.
+
 ## Parameters
 
 | Entry | Type | ID | Default | Role |
@@ -194,7 +223,7 @@ The record is 20 bytes.
 
 The page address is `FLASH_BASE + flash_size * 1024 - SOC_BLKNUM * FLASH_PAGE_SIZE`. `SOC_BLKNUM` is `PE_BLKNUM + PE_PAGES`, which puts the page below the `PowerLimiter` journal. `FLASH_PAGE_SIZE` is 2048 bytes.
 
-`PollPersist()` writes the record outside RUN and CHARGE, if a value moved more than its threshold.
+`PollPersist()` writes the record in OFF only, if a value moved more than its threshold. The contactors are open in OFF.
 
 | Value | Threshold |
 |---|---|

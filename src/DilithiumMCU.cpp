@@ -92,12 +92,12 @@ void DilithiumMCU::DecodeCAN(int id, uint8_t *data)
             break;
          case 0x0f: // GFM Summary
             BMS_Isolation = (data[2] | (data[3] << 8)); // GroundFaultIsolation in Ohm/v
-            timeoutCounterGFM = (uint8_t)(Param::GetInt(Param::BMS_Timeout) * 10);
+            timeoutCounterGFM = Param::GetInt(Param::BMS_Timeout) * 10;
             break;
       }
       // Reset timeout
       if(data[0] >= 0 && data[0] <= 5) // other values are not send by BMS but GFM or else
-         timeoutCounterBMS = (uint8_t)(Param::GetInt(Param::BMS_Timeout) * 10);
+         timeoutCounterBMS = Param::GetInt(Param::BMS_Timeout) * 10;
    }
    else if (id == 0x351) // ZEVCCS BMS_LIMITS
    {
