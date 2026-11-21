@@ -65,8 +65,8 @@ never changes for this pack, and `DilithiumMCU` hardcodes the same 73.
 
 Reused: `BMS_TmaxLimit` (hot ramp end), `BMS_TminLimit` (cold ramp start).
 
-Inputs read: `BMS_Vmin`, `BMS_Vmax`, `BMS_Tmin`, `BMS_Tmax`, `BMS_Tavg`, `SOC`, `idc`, `udc2`
-(falling back to `udc`), `BattCap`, `opmode`.
+Inputs read: `BMS_Vmin`, `BMS_Vmax`, `BMS_Tmin`, `BMS_Tmax`, `BMS_Tavg`, `SOC`, `idc`,
+`BMS_CapActual` (Ah, for the C-rate), `opmode`.
 
 ## Task rate
 
@@ -102,7 +102,10 @@ in SOC. Beyond that the difference is mostly OCV drift, not IR drop, and R comes
 - *plateau*: an earlier steady load. Preferred, because ΔV/ΔI cancels OCV entirely. Requires
   `|ΔI| ≥ DI_MIN` (25 A), same direction, and ΔV and ΔI agreeing in sign — more current must mean
   more voltage drop. A disagreeing pair is discarded rather than absolute-valued.
-- *rest*: an open-circuit sample taken after `REST_TICKS` (2 s) below `I_REST` (8 A). Fallback only.
+- *rest*: a low-current sample taken after `REST_TICKS` (2 s) below `I_REST` (8 A). Fallback only.
+  The sample refreshes only at the same or a lower current. A slow ramp, such as the AC charger at
+  0 to 6 kW in 30 s, is then measured from the current before the ramp, not from 8 A. ΔI is the signed
+  step from the rest current and must be at least `I_LEARN_MIN` (15 A).
 
 **Measurement** — R_eff at the pack, from the worst cell:
 
@@ -130,6 +133,9 @@ P             = I_total × vCell_limit × CELLS
 
 `P` uses the limit voltage, not the present voltage, because it is the power available at the moment
 the worst cell arrives at its limit.
+
+Past the limit, `headroom_cell` is negative, so `I_total` falls below `I_now` by the overshoot. The
+limit holds the worst cell at its limit and does not cut to 0. `BMS_LimSrc` then shows Sag or Drag.
 
 `R_pack` depends on C-rate and C-rate depends on `I_total`, so it is solved by fixed point: look R up
 at the present rate, recompute the rate from the result, look up again. Three passes. Without this, a

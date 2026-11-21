@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.30.WIM.12
+#define VER 2.30.WIM.13
 
 
 /* Entries must be ordered as follows:

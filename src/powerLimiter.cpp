@@ -114,7 +114,6 @@ struct Inputs
    float soc;
    float idc;      // + charge, - discharge (Dilithium / i3LIM convention)
    float absI;
-   float vPack;
    float ah;
    bool  haveCells;
 };
@@ -493,11 +492,13 @@ static void Learn(const Inputs& in)
    RefAge(&rest, in);
    RefAge(&plat, in);
 
-   /* Resting: keep refreshing an open-circuit reference. */
+   /* Resting: refresh the reference only at the same or lower current, so a slow
+    * ramp (AC charger) is measured from before it started, not from I_REST. */
    if (in.absI < I_REST)
    {
       if (restTicks < REST_TICKS) restTicks++;
-      if (restTicks >= REST_TICKS) RefUpdate(&rest, in);
+      if (restTicks >= REST_TICKS && (!rest.valid || in.absI <= rest.absI))
+         RefUpdate(&rest, in);
    }
    else
    {
@@ -549,11 +550,14 @@ static void Learn(const Inputs& in)
 
    if (!got && rest.valid)
    {
+      /* Step from the rest current, signed: DC-DC draw at rest adds to a charge step. */
+      float restIdc = rest.charging ? rest.absI : -rest.absI;
+      float di = ABS(in.idc - restIdc);
       float dv = charging ? (in.vMaxCell - rest.vMaxCell)
                           : (rest.vMinCell - in.vMinCell);
-      if (dv >= DV_CELL_MIN)
+      if (di >= I_LEARN_MIN && dv >= DV_CELL_MIN)
       {
-         rMeas = (dv * CELLS * 1000.0f) / in.absI;
+         rMeas = (dv * CELLS * 1000.0f) / di;
          got = true;
       }
    }
@@ -626,38 +630,20 @@ static void Compute(const Inputs& in)
    int src = SRC_NONE;
 
    /* Discharge: power at the moment the worst cell reaches its floor, so the
-    * voltage in P = I * V is the floor itself. (The old code computed the same
-    * number the long way round - vmin*n - iRem*R is vFloor*n by construction.) */
-   float crateNow = (in.ah > 1.0f) ? (in.absI / in.ah) : CAXIS[0];
-   float rD = Lookup(rDis, in.t, in.soc, crateNow);
-   float dis = 0.0f;
+    * voltage in P = I * V is the floor itself. Past the floor the headroom is
+    * negative, so the current drops by the overshoot and holds the cell at the
+    * floor instead of cutting to 0. */
+   float rD;
    float headDis = in.vMinCell - in.vFloor;
-   if (headDis > 0.0f)
-   {
-      float i = HeadroomCurrent(rDis, in, headDis, iNowDis, &rD);
-      dis = i * vFloorPack / 1000.0f;
-   }
-   else
-   {
-      src = SRC_SAG;
-   }
-   /* Published even in the SAG branch, where it is the R at the present rate
-    * rather than at the limit - otherwise it would read a bare R_MIN. */
+   float dis = HeadroomCurrent(rDis, in, headDis, iNowDis, &rD) * vFloorPack / 1000.0f;
+   if (headDis <= 0.0f) src = SRC_SAG;
    rUsed = rD;
 
    /* Charge: mirror image against the ceiling. */
-   float rC = R_MIN;
-   float chg = 0.0f;
+   float rC;
    float headChg = in.vCeil - in.vMaxCell;
-   if (headChg > 0.0f)
-   {
-      float i = HeadroomCurrent(rChg, in, headChg, iNowChg, &rC);
-      chg = i * vCeilPack / 1000.0f;
-   }
-   else if (src == SRC_NONE)
-   {
-      src = SRC_DRAG;
-   }
+   float chg = HeadroomCurrent(rChg, in, headChg, iNowChg, &rC) * vCeilPack / 1000.0f;
+   if (headChg <= 0.0f && src == SRC_NONE) src = SRC_DRAG;
 
    /* Hot ramp on tMax. Both directions taper to BMS_PwrHot, not to zero.
     * 152 kW at 40 C = 502 A = 5.6 kW I2R. Must already be derating.
@@ -740,12 +726,7 @@ void Task100Ms()
    in.idc = Param::GetFloat(Param::idc);
    in.absI = ABS(in.idc);
 
-   /* udc2 is the battery, udc the bus. Prefer the battery's own reading. */
-   in.vPack = Param::GetFloat(Param::udc2);
-   if (in.vPack < 1.0f) in.vPack = Param::GetFloat(Param::udc);
-
-   float kwh = Param::GetFloat(Param::BattCap);
-   in.ah = (kwh * 1000.0f) / (CELLS * 3.7f);
+   in.ah = Param::GetFloat(Param::BMS_CapActual);
 
    Learn(in);
    Compute(in);
