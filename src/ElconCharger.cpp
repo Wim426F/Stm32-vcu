@@ -26,7 +26,6 @@ static uint16_t HVvolts=0;
 static uint16_t HVspnt=0;
 static uint16_t HVpwr=0;
 static uint16_t HVcur=0;
-static uint16_t calcpwr=0;
 static uint16_t ChargerHVbatteryVolts =0;
 static uint16_t ChargerHVcurrent = 0;
 static uint8_t ChargerStatus = 0;
@@ -69,17 +68,10 @@ void ElconCharger::Task200Ms()
         HVspnt=Param::GetInt(Param::Voltspnt);
         HVpwr=Param::GetInt(Param::PwrAcMax);
 
-        HVcur = Param::GetInt(Param::BMS_ChargeLim);//BMS charge current limit but needs to be power for most AC charger types.
-        if(HVcur > 1000)
-        {
-            calcpwr = 12000;
-        }
-        else
-        {
-            calcpwr = HVcur*HVvolts;
-        }
-
-        HVpwr=MIN(HVpwr,calcpwr);
+        //What the battery can absorb (W). PwrAcMax is the user's preference and this
+        //can only pull us under it. A charge hold or a lost BMS publishes 0 kW.
+        float battW = Param::GetFloat(Param::BMS_MaxInput) * 1000.0f;
+        if(battW < HVpwr) HVpwr = (uint16_t)battW;
 
         HVcur = HVpwr / HVvolts;
 

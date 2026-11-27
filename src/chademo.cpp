@@ -206,18 +206,18 @@ void FCChademo::Task200Ms()
       int udc = Param::GetInt(Param::udc);
       int udcspnt = Param::GetInt(Param::Voltspnt);
       int chargeLim = (udc > 1) ? (int)(Param::GetFloat(Param::PwrCcsMax) * 1000.0f / udc) : 0;
-      chargeLim = MIN(150, chargeLim);
-
-      chargeLim = MIN(Param::GetInt(Param::BMS_ChargeLim), chargeLim);//BMS charge current limit for chademo
-      //Note: No need to worry about bms type as if none selected sets to 999.
+      //Battery charge limit, from kW to A at the measured pack voltage. A charge hold
+      //or a lost BMS publishes 0 kW.
+      int battLim = (udc > 1) ? (int)(Param::GetFloat(Param::BMS_MaxInput) * 1000.0f / udc) : 0;
+      chargeLim = MIN(150, MIN(chargeLim, battLim));
       //If chargeLim==0 chademo session will end.
 
       if (udc < udcspnt && controlledCurrent <= chargeLim)
          controlledCurrent++;
       if (udc > udcspnt && controlledCurrent > 0)
          controlledCurrent--;
-      if(controlledCurrent>chargeLim)
-         controlledCurrent--;
+      //A reduction lands at once
+      controlledCurrent = MIN(controlledCurrent, chargeLim);
 
       FCChademo::SetChargeCurrent(controlledCurrent);
       //TODO: fix this to not false trigger

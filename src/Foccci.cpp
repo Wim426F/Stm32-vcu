@@ -142,11 +142,8 @@ void FoccciClass::handle357(uint32_t data[2])  //FOCCCI Charge Port Info
 
     Param::SetInt(Param::CableLim,ChargePort_ACLimit);
 
-    uint16_t ACpow = GetInt(Param::ChgAcVolt) * ChargePort_ACLimit; //calculate Max AC power available
-
-    ACpow = GetInt(Param::ChgEff) *0.01 *  ACpow; //Compensate for charger efficiency
-
-    Param::SetInt(Param::PwrAcMax,ACpow); //write limit to parameter
+    //PwrAcMax is the user's preference and is not written here. The charger reads
+    //PilotLim and CableLim above for the EVSE limit.
 
 
     if (ChargePort_Plug == 2 || ChargePort_Plug == 3|| ChargePort_Status != 0x00) //Check Plug is inserted
@@ -346,14 +343,23 @@ void FoccciClass::CCS_Pwr_Con()    //here we control ccs charging during state 6
     uint16_t Tmp_ICCS_Avail=Param::GetInt(Param::CCS_I_Avail);
 
     if(CCSI_Spnt>Tmp_ICCS_Lim)CCSI_Spnt=Tmp_ICCS_Lim; //clamp setpoint to current lim paramater.
-    //if(CCSI_Spnt>150)CCSI_Spnt=150; //never exceed 150amps for now.
     if(CCSI_Spnt>=Tmp_ICCS_Avail)CCSI_Spnt=Tmp_ICCS_Avail; //never exceed available current
-    if(CCSI_Spnt>250)CCSI_Spnt=0; //crude way to prevent rollover
-    if((Tmp_Vbatt<Tmp_Vbatt_Spnt))CCSI_Spnt++;//increment if voltage lower than setpoint and power and current limts not set from charger.
-    if(Tmp_Vbatt>Tmp_Vbatt_Spnt)CCSI_Spnt--;//decrement if voltage equal to or greater than setpoint.
-    //BMS charge current limit for CCS
-    //Note: No need to worry about bms type as if none selected sets to 999.
-    CCSI_Spnt = MIN(Param::GetInt(Param::BMS_ChargeLim), CCSI_Spnt);
+    //Step toward the setpoint. The decrement is floored: CCSI_Spnt is unsigned and
+    //would wrap 0 -> 65535 at the end of a session.
+    if(Tmp_Vbatt<Tmp_Vbatt_Spnt)CCSI_Spnt++;//increment if voltage lower than setpoint
+    if((Tmp_Vbatt>Tmp_Vbatt_Spnt)&&CCSI_Spnt)CCSI_Spnt--;//decrement if voltage greater than setpoint
+    //Battery charge limit for CCS. The estimator works in kW, so convert at the
+    //measured pack voltage. PwrCcsMax above is the user's ceiling; this can only
+    //pull the setpoint below it. A charge hold or a lost BMS publishes 0 kW.
+    if(Tmp_Vbatt > 1)
+    {
+        uint32_t battILim = (uint32_t)(Param::GetFloat(Param::BMS_MaxInput) * 1000.0f / Tmp_Vbatt);
+        if(CCSI_Spnt > battILim) CCSI_Spnt = battILim;
+    }
+    else
+    {
+        CCSI_Spnt = 0;
+    }
 
     Param::SetInt(Param::CCS_Ireq,CCSI_Spnt);
 }

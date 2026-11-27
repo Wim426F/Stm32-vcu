@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.30.WIM.14
+#define VER 2.30.WIM.15
 
 
 /* Entries must be ordered as follows:
@@ -27,7 +27,7 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 162
+//Next param id (increase when adding new parameter!): 164
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_SETUP,     Inverter,     INVMODES, 0,       9,      0,      5  ) \
@@ -78,7 +78,7 @@
     PARAM_ENTRY(CAT_THROTTLE,  tmpmmax,     "°C",      70,      300,    300,    24 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtmax,    "%",       0,       100,    100,    25 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtmin,    "%",      -100,     0,     -100,    26 ) \
-    PARAM_ENTRY(CAT_THROTTLE,  throtmaxRev,    "%",    0,       100,    30,    123 ) \
+    PARAM_ENTRY(CAT_THROTTLE,  throtmaxRev, "%",       0,       100,    30,    123 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtdead,   "%",       0,       50,     10,     76 ) \
     PARAM_ENTRY(CAT_THROTTLE,  throtrpmfilt,"rpm/10ms",0.1,     200,    15,    131 ) \
     PARAM_ENTRY(CAT_THROTTLE,  PwrMotMax,   "kW",      0,       600,    150,    151 ) \
@@ -100,14 +100,14 @@
     PARAM_ENTRY(CAT_CHARGER,   ConfigFoccci,  ONOFF,   0,       1,      0,      133) \
     PARAM_ENTRY(CAT_DCDC,      DCdc_Type,   DCDCTYPES, 0,       1,      0,      105 ) \
     PARAM_ENTRY(CAT_DCDC,      DCSetPnt,    "V",       9,       15,     14,     106 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_VsagLimit, "V",     2.0,     4.0,    2.5,    154 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_VsagLimit, "V",     2.0,     4.0,    2.6,    154 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_VminLimit, "V",     0,       10,     3.0,    92 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_VmaxLimit, "V",     0,       10,     4.2,    93 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_VdragLimit,"V",     3.5,     4.5,    4.2,    155 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_TminLimit, "°C",    -100,    100,    5,      94 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_TminLimit, "°C",    -100,    100,    0,      94 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_TmaxLimit, "°C",    -100,    100,    50,     95 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_Tderate,   "°C",    -100,    100,    40,     156 ) \
-    PARAM_ENTRY(CAT_BMS,       BMS_TderateChg,"°C",    -100,    100,    35,     158 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_TmaxChg,   "°C",    -100,    100,    45,     163 ) \
+    PARAM_ENTRY(CAT_BMS,       BMS_TderateSpan,"K",    1,       30,     5,      162 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_IsoLimit,  "Ohm/V", 0,       100000, 500,    139 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_PwrHot,    "kW",    0,       100,    15,     157 ) \
     PARAM_ENTRY(CAT_BMS,       BMS_CapActual, "Ah",    50,      500,    215,    160 ) \
@@ -194,6 +194,7 @@
     VALUE_ENTRY(BMS_KwhActual, "kWh",               2130 ) \
     VALUE_ENTRY(BMS_MaxInput,  "kW",                2105 ) \
     VALUE_ENTRY(BMS_MaxOutput, "kW",                2106 ) \
+    VALUE_ENTRY(BMS_MaxRegen,  "kW",                2134 ) \
     VALUE_ENTRY(BMS_IdisMax,   "A",                 2119 ) \
     VALUE_ENTRY(BMS_IchgMax,   "A",                 2118 ) \
     VALUE_ENTRY(BMS_ChargeLim, "A",                 2088 ) \
@@ -273,7 +274,7 @@
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
     VALUE_ENTRY(DriverDoorSt,  DMODES,              2112 ) \
 
-//Next value Id: 2134
+//Next value Id: 2135
 
 //////////
 
@@ -285,7 +286,7 @@
 #define APINFUNCS    "0=None, 1=ProxPilot, 2=BrakeVacSensor"
 #define SHIFTERS     "0=None, 1=BMW_F30, 2=JLR_G1, 3=JLR_G2, 4=BMW_E65"
 #define SHNTYPE      "0=None, 1=ISA, 2=SBOX, 3=VAG, 4=HVCU"
-#define BMSLIMSRC    "0=None, 1=Sag, 2=Drag, 3=Hot, 4=Cold, 5=NoData"
+#define BMSLIMSRC    "0=None, 1=Sag, 2=Drag, 3=Hot, 4=Cold, 5=NoData, 6=Plating"
 #define DMODES       "0=CLOSED, 1=OPEN, 2=ERROR, 3=INVALID"
 #define POTMODES     "0=SingleChannel, 1=DualChannel"
 #define BTNSWITCH    "0=Button, 1=Switch, 2=CAN"

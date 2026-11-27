@@ -1,349 +1,349 @@
 # Battery power limiter
 
-Implementation notes for `src/power_estimator.cpp` / `include/power_estimator.h`.
+This page describes the battery power limiter in `src/powerLimiter.cpp` and `include/powerLimiter.h`.
 
-## Purpose
+## Principle
 
-Publish how much power the pack can safely deliver and absorb, derived from the worst cell's
-remaining voltage headroom divided by the pack's internal resistance at the present temperature,
-SOC and C-rate. Resistance is learned in the background and persisted to flash.
+- Limit current = present current + headroom of the worst cell × 73 / pack R.
+- Pack R comes from two learned tables, one per direction, kept in flash.
+- Charge and regen also have a plating limit on the coldest cell.
+- User temperature ramps reduce the result.
+- The limiter only reduces. Each consumer takes MIN(user preference, limiter value).
 
-## Authority model
-
-The module reports battery capability only. The user's power preferences are applied by the consumers:
+## Data flow
 
 ```
-final limit = MIN(user preference, battery capability, what the other end can supply)
+DilithiumMCU -> BMS_Vmin, BMS_Vmax, BMS_Tmin, BMS_Tmax, BMS_Tavg, idc, SOC
+             -> Learn() -> R tables -> PollPersist() -> flash record
+             -> Compute() -> headroom current -> plating limit -> thermal ramps -> slew
+             -> BMS_MaxOutput, BMS_MaxInput, BMS_MaxRegen -> consumers
 ```
 
-The estimator can only reduce a limit, never raise one. It does not read the preferences.
+## Functions
 
-## Interface
-
-Written by `PowerLimiter` only:
-
-| Value | Unit | Meaning |
+| Function | Rate | Action |
 |---|---|---|
-| `BMS_MaxOutput` | kW | discharge capability |
-| `BMS_MaxInput` | kW | charge capability |
-| `BMS_IdisMax` | A | same discharge limit as current, informational |
-| `BMS_IchgMax` | A | same charge limit as current, informational |
-| `BMS_Rpack` | mΩ | pack R_eff at the present discharge operating point |
-| `BMS_LimSrc` | enum | binding constraint: `None/Sag/Drag/Hot/Cold/NoData` |
-| `BMS_OcvMax` | mV | highest cell's resting voltage estimate, see Charge gate |
-| `Voltspnt` | V | pack voltage target for the chargers, `73 × MAX(BMS_VmaxLimit, BMS_VdragLimit)` |
-
-`BMS_MaxOutput` / `BMS_MaxInput` are the values a BMS is meant to report. The estimator is the missing
-part of the BMS rather than a separate subsystem, so it uses the `BMS_` namespace throughout, and it is
-now the only writer — the equivalent writes were dropped from `leafbms` and `kangoobms`, where task
-ordering silently decided the winner.
-
-Battery parameters:
-
-| Param | Unit | Default | Meaning |
-|---|---|---|---|
-| `BMS_VsagLimit` | V | 2.5 | worst cell may be dragged here under load |
-| `BMS_VdragLimit` | V | 4.2 | worst cell may be pushed here under charge |
-| `BMS_Tderate` | °C | 40 | hot ramp start |
-| `BMS_PwrHot` | kW | 15 | power held at and above `BMS_TmaxLimit` |
-
-Each of the four cell voltage limits has one job:
-
-| Param | Meaning | Used by |
-|---|---|---|
-| `BMS_VsagLimit` | absolute minimum under load | discharge floor |
-| `BMS_VminLimit` | resting empty, SOC 0 % | SOC estimator |
-| `BMS_VmaxLimit` | resting full, SOC 100 %, charge target | SOC estimator, charge gate |
-| `BMS_VdragLimit` | absolute maximum under charge current | charge ceiling |
-
-`DilithiumMCU::ChargeAllowed()` refuses charge above `MAX(BMS_VmaxLimit, BMS_VdragLimit)` and below
-`MIN(BMS_VminLimit, BMS_VsagLimit)`. Either limit of each pair may be set inside the other; the inner
-one is a normal operating point, so the hard stop sits at the outer one. A pack driven to 0 % rests
-near `BMS_VminLimit` and can still charge.
-
-User power preferences, all kW. Set in power because that is what the T2C accepts and what a CCS
-session negotiates. The equivalent current is a consequence of pack sag, so it is published as a value
-and never set:
-
-| Param | Unit | Default | Applied by |
-|---|---|---|---|
-| `PwrMotMax` | kW | 150 | `EvControlsT2C`, and `Throttle::IdcLimitCommand` for any other inverter |
-| `PwrRegenMax` | kW | 60 | same |
-| `PwrCcsMax` | kW | 50 | `i3LIM`, `chademo`, `Foccci` (filed under Charger Control) |
-| `PwrAcMax` | W | — | `teslaCharger` (pre-existing, left in watts) |
-
-Series cell count is the compile-time constant `CELLS` in `power_estimator.cpp`, not a parameter — it
-never changes for this pack, and `DilithiumMCU` hardcodes the same 73.
-
-Reused: `BMS_TmaxLimit` (hot ramp end), `BMS_TminLimit` (cold ramp start).
-
-Inputs read: `BMS_Vmin`, `BMS_Vmax`, `BMS_Tmin`, `BMS_Tmax`, `BMS_Tavg`, `SOC`, `idc`,
-`BMS_CapActual` (Ah, for the C-rate), `opmode`.
-
-## Task rate
-
-One `Task100Ms()`. Every input is written once per 100 ms by `DilithiumMCU::Task100Ms`, and 0x293 is
-multiplexed on `data[0]` so the cell-voltage sub-frame can arrive slower still. A faster task would
-reprocess identical values.
-
-`PollPersist()` is called from the main loop, never from the scheduler ISR — see Persistence.
+| `Init()` | once | loads the prefill, then the newest valid flash record |
+| `Task100Ms()` | 100 ms | reads the inputs, runs `Learn()` and `Compute()`, publishes the values |
+| `Learn()` | 100 ms | measures pack R between two steady loads and updates one bin |
+| `Compute()` | 100 ms | calculates the three power limits |
+| `PollPersist()` | main loop | writes a record in `MOD_OFF` |
 
 ## Tables
 
-Two tables, one per direction, holding pack R_eff in mΩ:
+Two tables hold pack R in mΩ: `rDis` for discharge, `rChg` for charge and regen. `Lookup()`
+interpolates on all three axes and holds the end node off an axis end.
 
-- temperature: `-10, 0, 25, 40, 50` °C
-- SOC: `10, 50, 90` %
-- C-rate: `0.5, 1, 2, 3, 4`
+| Axis | Nodes |
+|---|---|
+| Temperature (`BMS_Tavg`) | -10, 0, 20, 35, 50 °C |
+| SOC | 0, 10, 30, 90 % |
+| C-rate | 0.5, 1, 2, 3, 4 |
 
-5 × 3 × 5 = 75 bins per table. Lookup is trilinear, clamped to the end bin off either axis end.
-Initialised from a conservative physics-based prefill, never from empty.
+R doubles from 10 % to 0 % SOC. The 30 % node follows ageing: in an aged LG M50T cell, R rises
+below 30 % SOC and is flat above it (Natella, Onori, Vasca, IEEE TIE 2023).
+
+**Prefill** (`PREFILL`), a least-squares fit on 422 plateau measurements in 11 drive logs at 15.5 to
+24.5 °C and 0 % to 93 % SOC:
+
+```
+R = R20(SOC) × fT × (1 + 0.09 × (C − 0.5))
+```
+
+| Part | Value | Basis |
+|---|---|---|
+| R20, 20 °C, 0.5C, SOC 0 / 10 / 30 / 90 % | 96.0 / 52.4 / 46.9 / 49.9 mΩ | measured |
+| fT, 35 / 50 °C | 0.826 / 0.694 | measured slope, Ea 9.6 kJ/mol (90 % range 0 to 18.5) |
+| fT, 0 / -10 °C | 1.567 / 2.507 | not measured |
+| C-rate | +9 % per C | measured: flat to 1.1C, +10 % at 2.6C |
+| Charge table | 1.11 × discharge (`CHG_OVER_DIS`) | measured on regen |
+
+A valid flash record overrides the prefill. `pereset` loads the prefill.
 
 ## Learning
 
-A measurement requires a stable load and a valid voltage reference.
-
-**Stability** — peak-to-peak of raw `idc` must stay within `I_STABLE_BAND` (8 A) across the whole
-`STABLE_TICKS` (15 tick = 1.5 s) window. Peak-to-peak rather than deviation from a filtered value:
-a filter with a short time constant tracks a slow ramp, so the residual stays small and a ramp
-passes as stable. With τ ≈ 62 ms an 8 A band admitted ramps up to ~140 A/s.
-
-**References** — two kinds, both aged out after `REF_MAX_AGE` (60 s) or a `REF_MAX_DSOC` (2 %) shift
-in SOC. Beyond that the difference is mostly OCV drift, not IR drop, and R comes out inflated.
-
-- *plateau*: an earlier steady load. Preferred, because ΔV/ΔI cancels OCV entirely. Requires
-  `|ΔI| ≥ DI_MIN` (25 A), same direction, and ΔV and ΔI agreeing in sign — more current must mean
-  more voltage drop. A disagreeing pair is discarded rather than absolute-valued.
-- *rest*: a low-current sample taken after `REST_TICKS` (2 s) below `I_REST` (8 A). Fallback only.
-  The sample refreshes only at the same or a lower current. A slow ramp, such as the AC charger at
-  0 to 6 kW in 30 s, is then measured from the current before the ramp, not from 8 A. ΔI is the signed
-  step from the rest current and must be at least `I_LEARN_MIN` (15 A).
-
-**Measurement** — R_eff at the pack, from the worst cell:
+`Learn()` compares two steady loads. ΔV / ΔI cancels the OCV.
 
 ```
-R_pack[mΩ] = ΔV_cell × CELLS × 1000 / ΔI
+R_pack[mΩ] = ΔV_cell × 73 × 1000 / ΔI
 ```
 
-using `minCellV` on discharge and `maxCellV` on charge.
+ΔV_cell comes from `BMS_Vmin` on discharge and `BMS_Vmax` on charge.
 
-**Update** — EWMA with α = 0.05 into the single nearest T/SOC/C-rate bin. No extrapolation to
-neighbours. Rejected if outside 8…2000 mΩ, or more than a factor of 3 from the value the bin already
-holds; a valid measurement does not move pack IR threefold. Note the factor-of-3 gate also bounds how
-far learning can pull away from the prefill — if the prefill is badly wrong, `pereset` and a corrected
-prefill is the route, not waiting for convergence.
+| Condition | Value |
+|---|---|
+| Steady load | `idc` within 8 A peak-to-peak, 15 A or more |
+| Window | 1.5 s below 1C, 0.5 s at 1C and above |
+| Reference | the previous steady load, maximum 30 s and 2 % SOC old |
+| Step | ΔI 25 A or more, ΔV 5 mV or more, same direction, same sign |
+
+`Learned()` applies an EWMA with gain 0.05 to the raw value in one bin:
+
+| Axis | Bin | Condition |
+|---|---|---|
+| Temperature | nearest node | within 2 K of the node (`T_NODE_BAND`) |
+| SOC | nearest node | - |
+| C-rate | node of the higher of the two currents | - |
+
+The value must be within 1/3 to 3 × the prefill of the bin. Values between two temperature nodes
+belong to neither node, so the code skips them.
+
+Closed-loop replay of `drive_home_work3` (worst cell 4 % to 0 % SOC, 5 s drive unit smoothing,
+`BMS_VsagLimit` 2.6 V): the lowest cell reaches 2.49 V, 2 s below 2.5 V in total.
 
 ## Limit computation
 
-Headroom current, per direction:
+`HeadroomCurrent()`:
 
 ```
-headroom_cell = vCell_now − vCell_limit
-I_total       = I_now + headroom_cell × CELLS / R_pack
-P             = I_total × vCell_limit × CELLS
+I = MIN(I_now + (vCell_now − vCell_limit) × 73 / R_pack, I_cap)
 ```
 
-`P` uses the limit voltage, not the present voltage, because it is the power available at the moment
-the worst cell arrives at its limit.
+`I_now` is `−idc` for discharge and `+idc` for charge.
 
-Past the limit, `headroom_cell` is negative, so `I_total` falls below `I_now` by the overshoot. The
-limit holds the worst cell at its limit and does not cut to 0. `BMS_LimSrc` then shows Sag or Drag.
+| Output | Limit | Cap | Power |
+|---|---|---|---|
+| `BMS_MaxOutput` | `BMS_VsagLimit` | - | I × `BMS_VsagLimit` × 73 |
+| `BMS_MaxInput` | `BMS_VdragLimit` | SOC curve × `BMS_CapActual` × f | I × V_pack(I) |
+| `BMS_MaxRegen` | `BMS_VdragLimit` | -, result × f_regen | I × V_pack(I) |
 
-`R_pack` depends on C-rate and C-rate depends on `I_total`, so it is solved by fixed point: look R up
-at the present rate, recompute the rate from the result, look up again. Three passes. Without this, a
-lookup at standstill lands on the 0.5C bin — the lowest R in the table — and over-predicts current by
-roughly 1.7×.
+`V_pack(I) = BMS_Vmin × 73 + (I − idc) × R_pack`. A charger that divides by its measured pack voltage
+gets the same current back.
 
-The iteration converges to an interior R only when the predicted current is inside the 4C axis end.
-Above that it pegs at 4C and the figure stays optimistic. For a 216 Ah pack this is the normal case
-at moderate temperature, where the preference binds regardless; the iteration converges properly in
-the cold and low-SOC region where the estimator actually becomes the binding limit.
+Past the limit, the headroom is negative and the current drops below `I_now`. The worst cell stays
+at its limit. R depends on the C-rate of the result, so the function makes 4 passes. Above 4C the
+lookup holds the 4C node.
+
+## Plating limit
+
+| Output | Rule |
+|---|---|
+| `BMS_MaxInput` (AC and CCS) | MIN(drag current, SOC curve × `BMS_CapActual` × f) |
+| `BMS_MaxRegen` | drag current × f_regen |
+| `BMS_MaxOutput` | none |
+
+**SOC curve** (`PSOC`, `PCRATE`): Tesla Model 3 LR on a 250 kW Supercharger, cells 45 to 59 °C
+(Bjørn Nyland), pack current / 221 Ah. It holds the end value off either end. Regen pulses last
+seconds and have no SOC curve.
+
+| SOC % | 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 |
+|---|---|---|---|---|---|---|---|---|---|
+| C | 3.08 | 2.71 | 2.17 | 1.67 | 1.13 | 0.90 | 0.72 | 0.51 | 0.34 |
+
+**Temperature factor** on `BMS_Tmin`:
+
+```
+f = MIN(1, exp(−Ea / R × (1 / T − 1 / Tref)))
+```
+
+| Constant | Value | Source |
+|---|---|---|
+| Ea | 26 kJ/mol | Yang 2018, NMC/graphite; the M50LT datasheet step from 0.3C to 0.7C gives 25 |
+| `PLATING_TREF` | 50 °C | the temperature of the SOC curve |
+| `PLATING_TREF_REGEN` | 25 °C | tuned, see below |
+
+| T °C | 0 | 5 | 10 | 15 | 20 | 25 | 40 | 50 |
+|---|---|---|---|---|---|---|---|---|
+| f | 0.17 | 0.21 | 0.25 | 0.31 | 0.37 | 0.44 | 0.74 | 1.00 |
+| f_regen | 0.38 | 0.47 | 0.57 | 0.69 | 0.84 | 1.00 | 1.00 | 1.00 |
+
+**f_regen is a tuned value, not physics.** It is f × 2.25, maximum 1. No source gives a safe regen
+pulse limit against temperature. The 25 °C rests on:
+
+- Plating grows with time at current: double the pulse length gave 1.5 to 3.3 × the plating in
+  21700 cells (J. Electrochem. Soc., sub-zero pulse study).
+- Tesla owner reports: half regen on a cold pack, full after 20 to 30 min of driving.
+- Pack R comes from the table at the present temperature, so the drag limit tightens in the cold.
+
+The one measured Tesla regen limit, 0.78C at 91 % SOC with the pack temperature unknown, gives 1.00C
+with f_regen at 40 °C. At 0 °C and 30 % SOC f_regen allows 0.82C pulses.
+
+`BMS_LimSrc` shows Plating when no other source applies: in charge mode when the curve caps the
+current, in other modes when f_regen < 1.
 
 ## Thermal ramps
 
-Applied after the headroom calculation, battery temperature only. Inverter and motor temperature are
-not battery protection and are not consulted.
+User preferences on battery temperature. They only reduce the limit.
 
-**Hot**, on `BMS_Tmax`, both directions: full power below `BMS_Tderate`, linear down to `BMS_PwrHot`
-at `BMS_TmaxLimit`, held at `BMS_PwrHot` above. Reduction only — an already-lower limit is never
-raised toward the floor.
+**Hot ramp**, on `BMS_Tmax`: linear from full power at the maximum − `BMS_TderateSpan` to `BMS_PwrHot`
+at the maximum, held above.
 
-A hard cut to 0 kW is itself unsafe: the pack is commonly at 40–50 °C after a fast charge, and the
-vehicle must still be able to hold motorway speed. Loop capacity is unknown, so the defaults are
-sized by I²R heat generation at the pack instead (303 V, R from the table):
+| Output | Maximum | Default |
+|---|---|---|
+| `BMS_MaxOutput` | `BMS_TmaxLimit` | 50 °C |
+| `BMS_MaxInput`, `BMS_MaxRegen` | `BMS_TmaxChg` | 45 °C |
 
-| condition | current | R | heat |
-|---|---|---|---|
-| 152 kW at 40 °C | 502 A | 22.2 mΩ | 5.6 kW |
-| 84 kW at 45 °C | 277 A | 17.0 mΩ | 1.3 kW |
-| 15 kW at 50 °C | 50 A | 12.5 mΩ | 31 W |
+`BMS_PwrHot` 15 kW holds motorway speed. At 50 °C it puts 81 W into the pack (49.5 A, 33.2 mΩ). The
+pack loses 60 to 225 W passively at 60 °C in 30 °C still air.
 
-5.6 kW of self-heating exceeds any plausible loop, so derating must already be under way at 40 °C.
-31 W is two orders of magnitude below it, so the pack cools even while sitting at the floor. Loop
-capacity therefore never needs measuring: even a pessimistic 250 W rejection budget would sustain
-43 kW. `BMS_PwrHot` = 15 kW is chosen to meet the requirement (≈10–15 kW holds motorway speed for
-this car), not as the maximum the pack could sustain — raise it if logged cell temperatures show
-margin.
-
-**Cold**, on `BMS_Tmin`, charge only: linear from full at `BMS_TminLimit` to 0 at
-`BMS_TminLimit − 5 °C`. Discharge is not derated by cold; the vehicle must remain drivable. Ramped
-rather than stepped so regen does not disappear in a single tick while driving.
+**Cold ramp**, on `BMS_Tmin`: linear from full at `BMS_TminLimit` to 0 at `BMS_TminLimit −
+BMS_TderateSpan`. The charge gate stops charging at `BMS_TminLimit`, so the ramp acts on regen only.
+Discharge has no cold ramp.
 
 ## Degraded input
 
-If `BMS_Vmin`/`BMS_Vmax` are absent (BMS timeout, or a BMS that does not report cells) both outputs
-are set to `PWR_NOLIMIT` (1000 kW) and `BMS_LimSrc = NoData`. Publishing 0 would cut drive power to
-nothing on a momentary CAN dropout, and the T2C faults on a 0 kW limit. The preferences remain in
-force at the consumers.
+With `BMS_Vmin` or `BMS_Vmax` at 0.5 V or below, all three outputs are `PWR_NOLIMIT` (1000 kW) and
+`BMS_LimSrc` shows NoData. Missing cell data never gives a 0 kW discharge limit. In `MOD_CHARGE`,
+`BMS_MaxInput` is 0.
 
-In `MOD_CHARGE` the charge output is 0 instead: a charge without cell monitoring is not allowed.
+## Empty pack
+
+Below `BMS_VminLimit` (SOC 0 %), only the sag limit sets the discharge power. `BMS_MaxOutput` is 0
+when the IR-compensated lowest cell is at `BMS_VsagLimit`.
+
+| Condition | Result |
+|---|---|
+| `BMS_MaxOutput` 0 | The T2C sends 0 kW. The drive unit faults and coasts. A key cycle clears the fault. |
+| `BMS_MaxOutput` 0 and `speed` below 50 rpm | `MOD_RUN` goes to `MOD_SHUTDOWN_REQUEST`, in any gear. |
+
+`MOD_RUN` also goes to `MOD_SHUTDOWN_REQUEST` at key off with `speed` below 50 rpm, in any gear. The
+lever goes to Park on `MOD_OFF`.
 
 ## Charge gate
 
-AC and DC share one rule: every charger obeys `BMS_MaxInput`. In `MOD_CHARGE`, `Task100Ms()` sets
-`BMS_MaxInput` and `BMS_IchgMax` to 0 when `ChgHold` is not `None` or there is no cell data. No
-charger needs its own pause code.
+In `MOD_CHARGE`, `Task100Ms()` sets `BMS_MaxInput` and `BMS_IchgMax` to 0 when `ChgHold` is not
+None or there is no cell data. Every charger obeys `BMS_MaxInput`.
 
-`BMS_OcvMax` is `BMS_Vmax − idc × R / 73`, with R from the charge table at the present C-rate, and
-only while charging. The unsubtracted polarisation makes it read high, so a charge that ends on it
-ends early, never late. At the end of a charge the current is lowest, so the R error matters least.
+`BMS_OcvMax = BMS_Vmax − idc × R / 73`, with R from the charge table, while charging. It reads high,
+so a charge that ends on it ends early.
 
-The decision block in `stm32_vcu.cpp` (`Ms200Task`) runs in `MOD_CHARGE` for AC and DC:
+The decision block in `stm32_vcu.cpp` (`Ms200Task`), `MOD_CHARGE`:
 
 | Condition | AC | DC |
 |---|---|---|
-| BMS data valid and `BMS_Tmin` / `BMS_Tmax` outside `BMS_TminLimit` / `BMS_TmaxLimit` | `ChgHold = WaitTemp`, resumes on its own | same |
-| `SOC ≥ ChgSocLimit` or `BMS_OcvMax ≥ BMS_VmaxLimit`, 4 s continuous | `ChgHold = Full`, HV stays live, latched until charge mode ends | end + lockout |
-| BMS charge current 0 for another reason (BMS lost, hard voltage limit), 4 s continuous | end + lockout | same |
-| `udc ≥ Voltspnt`, or the charge stop button | end + lockout | same |
+| `BMS_Tmin` below `BMS_TminLimit` or `BMS_Tmax` above `BMS_TmaxChg` | `ChgHold` = WaitTemp, resumes | same |
+| `SOC ≥ ChgSocLimit` or `BMS_OcvMax ≥ BMS_VmaxLimit`, 4 s | `ChgHold` = Full, HV stays live | end and lockout |
+| BMS charge current 0 for another reason, 4 s | end and lockout | same |
+| `udc ≥ Voltspnt`, or the charge stop button | end and lockout | same |
 
-The 4 s is the time the BMS gets to report after the start of charge. The wait is a state, not an
-error: `ChgHold` shows it in the web UI and posts nothing to the error log.
-
-With `BMS_VdragLimit` below `BMS_VmaxLimit`, the ceiling holds the cell below `BMS_VmaxLimit`, so
-`BMS_OcvMax` never reaches it and the charge trickles at the ceiling until stopped. This is
-intentional.
-
-`ChgSocLimit` (ID 44, formerly `CCS_SOCLimit`) applies to AC and DC. SOC follows the weakest cell and
-rarely reaches 100 %, so at 100 % `BMS_OcvMax` usually ends the charge.
+`DilithiumMCU::ChargeAllowed()` refuses charge above `MAX(BMS_VmaxLimit, BMS_VdragLimit)`, below
+2.00 V (`V_CELL_UVP`, LG INR21700-M50LT spec 2.11, under-voltage protection), above `BMS_TmaxChg`
+and below `BMS_TminLimit`.
 
 ## Output slew
 
-Increases are limited to `PWR_SLEW` (5 kW/tick = 50 kW/s); decreases take effect immediately. Ramping
-up avoids chasing worst-cell noise; a reduction is the safe direction and must not be delayed. This
-also means recovery from `NoData` drops straight to the real limit rather than leaving the pack
-unprotected while a 1000 kW placeholder ramps down.
+An increase is limited to 5 kW per tick (`PWR_SLEW`, 50 kW/s). A decrease applies at once.
 
-## Persistence
+## Published values
 
-Two flash pages (`PE_BLKNUM 5`, `PE_PAGES 2` → `0x0801D800` and `0x0801D000`), six 320-byte slots
-each, below the param and CAN map pages. ROM is 112 K and ends exactly at `0x0801D000`.
+| Value | ID | Unit | Meaning |
+|---|---|---|---|
+| `BMS_MaxOutput` | 2106 | kW | discharge capability |
+| `BMS_MaxInput` | 2105 | kW | charge capability, AC and CCS |
+| `BMS_MaxRegen` | 2134 | kW | regen capability |
+| `BMS_IdisMax` | 2119 | A | `BMS_MaxOutput` as current |
+| `BMS_IchgMax` | 2118 | A | `BMS_MaxInput` as current |
+| `BMS_Rpack` | 2120 | mΩ | pack R at the discharge operating point |
+| `BMS_LimSrc` | 2121 | enum | 0 None, 1 Sag, 2 Drag, 3 Hot, 4 Cold, 5 NoData, 6 Plating |
+| `BMS_OcvMax` | 2133 | mV | resting voltage estimate of the highest cell |
+| `Voltspnt` | 2132 | V | `73 × MAX(BMS_VmaxLimit, BMS_VdragLimit)` |
 
-Each slot holds magic, generation counter, version, both tables as `uint16` at 0.1 mΩ, and a CRC.
-Load scans all slots and takes the highest valid generation. Commit appends to the next free slot;
-when a page fills, it moves to the other page and erases that one, so the newest record on the
-opposite page always survives a power loss mid-commit. One erase per six saves.
+## Parameters
 
-Committed only on the live → not-live `opmode` transition, never on a timer while driving:
-`flash_erase_page` runs with interrupts disabled and stalls the bus for 20–40 ms, masking the TIM4
-scheduler and all CAN RX. R_eff moves over weeks, so a periodic save buys nothing.
+| Entry | Unit | ID | Default | Role |
+|---|---|---|---|---|
+| `BMS_VsagLimit` | V | 154 | 2.6 | worst cell minimum under load |
+| `BMS_VminLimit` | V | 92 | 3.0 | resting empty, SOC 0 % |
+| `BMS_VmaxLimit` | V | 93 | 4.2 | resting full, SOC 100 %, charge target |
+| `BMS_VdragLimit` | V | 155 | 4.2 | worst cell maximum under charge current |
+| `BMS_TminLimit` | °C | 94 | 0 | charge gate, cold ramp start |
+| `BMS_TmaxLimit` | °C | 95 | 50 | discharge hot ramp end |
+| `BMS_TmaxChg` | °C | 163 | 45 | charge and regen hot ramp end, charge gate |
+| `BMS_TderateSpan` | K | 162 | 5 | length of the hot and cold ramps |
+| `BMS_PwrHot` | kW | 157 | 15 | power at and above each maximum temperature |
+| `BMS_CapActual` | Ah | 160 | 215 | capacity for the C-rate |
+| `PwrMotMax` | kW | 151 | 150 | user preference, drive |
+| `PwrRegenMax` | kW | 152 | 35 | user preference, regen |
+| `PwrCcsMax` | kW | 153 | 50 | user preference, DC charge |
+| `PwrAcMax` | W | 41 | 9000 | user preference, AC charge |
+| `ChgSocLimit` | % | 44 | 100 | charge target, AC and DC |
 
-`dirty` is set from the scheduler ISR and cleared in the main loop before the write, so anything
-learned during the erase still marks the table dirty.
+The series cell count is the constant `CELLS` (73).
 
-`PollPersist()` additionally refuses to erase while `opmode` is RUN or CHARGE and keeps the request
-pending. The normal trigger already fires after the mode has left live, so this only affects
-`pereset`, which defers its save to the next shutdown rather than stalling the bus mid-drive.
+## Flash record
+
+Two 2 KB pages, 4 slots of 416 bytes each. On a 128 KB part page 0 is at `0x0801D800` and page 1 at
+`0x0801D000` (`PE_BLKNUM` 5, `PE_PAGES` 2).
+
+| Field | Type | Content |
+|---|---|---|
+| `magic` | uint32 | `0x52454646` ('REFF') |
+| `generation` | uint32 | +1 per record |
+| `version` | uint16 | `PE_VERSION` 3 |
+| `reserved` | uint16 | 0 |
+| `dis[100]` | uint16 | discharge table, 0.1 mΩ |
+| `chg[100]` | uint16 | charge table, 0.1 mΩ |
+| `crc` | uint32 | STM32 CRC over the fields above |
+
+`LoadFromFlash()` takes the highest valid generation. `CommitFlash()` writes the next free slot.
+When a page is full, it erases the other page and writes there.
+
+`Task100Ms()` requests a save after the exit from RUN or CHARGE when a bin changed. `PollPersist()`
+writes only in `MOD_OFF`: the erase runs with interrupts off.
+
+CAUTION: A record with a different `PE_VERSION` is ignored. A change of the table axes without a new
+`PE_VERSION` loads old values into the wrong bins.
 
 ## Consumers
 
-| Path | File | Preference | Expression |
+| Path | File | Preference | Battery limit |
 |---|---|---|---|
-| Motor drive | `EvControlsT2C.cpp` | `PwrMotMax` | `MIN(PwrMotMax, BMS_MaxOutput)` |
-| Motor regen | `EvControlsT2C.cpp` | `PwrRegenMax` | `MIN(PwrRegenMax, BMS_MaxInput)` |
-| Motor, other inverters | `throttle.cpp` | `PwrMotMax` / `PwrRegenMax` | `IdcLimitCommand` derives its amp limits at the present `udc` |
-| AC charge | `teslaCharger.cpp` | `PwrAcMax` | `BMS_MaxInput × 1000` into the existing MIN chain |
-| DC charge | `i3LIM.cpp` | `PwrCcsMax` | both converted to amps at `udc`, then MIN |
+| Drive, T2C | `EvControlsT2C.cpp` | `PwrMotMax` | `BMS_MaxOutput` |
+| Regen, T2C | `EvControlsT2C.cpp` | `PwrRegenMax` | `BMS_MaxRegen` |
+| Drive and regen, other inverters | `throttle.cpp` | `PwrMotMax`, `PwrRegenMax` | - |
+| AC charge, TeslaOI | `teslaCharger.cpp` | `PwrAcMax` | `BMS_MaxInput` |
+| AC charge, Elcon | `ElconCharger.cpp` | `PwrAcMax` | `BMS_MaxInput` |
+| DC charge, i3LIM | `i3LIM.cpp` | `PwrCcsMax` | `BMS_MaxInput`, in A at `udc` |
+| DC charge, Foccci | `Foccci.cpp` | `PwrCcsMax` | `BMS_MaxInput`, in A at `udc` |
+| DC charge, CHAdeMO | `chademo.cpp` | `PwrCcsMax` | `BMS_MaxInput`, in A at `udc`, maximum 150 A |
 
-T2C clamps the 0x696 fields to 1…650 kW. The frame carries `uint16` at 0.01 kW, so 655.35 kW is the
-largest representable value and an unclamped cast wraps; the lower bound keeps the limit off exactly
-zero, which the drive unit treats as a fault.
+The T2C clamps the 0x696 discharge field to 0 to 650 kW and the regen field to 1 to 650 kW (uint16
+at 0.01 kW). A 0 kW limit faults the drive unit until a key cycle. Regen is 0 kW on a full or cold
+pack, so the regen field stays at 1 kW or more.
 
-`regenmax` is **not** usable as a regen power cap. Despite its `"A"` unit label it is a torque
-percent — `throttle.cpp` feeds it to `changeFloat(potnom, 0, 100, regenlim*10, throtmax*10)`.
-
-### DC fast charge ceilings
-
-`PwrCcsMax` is a global preference and is not capped by any one charge interface — 350 kW is allowed
-because a Foccci-based setup can carry it. Each interface clamps internally to what its own protocol
-can express.
-
-For i3LIM that is two ceilings, now the only things limiting the DC path:
-
-- `FC_Cur` in 0x3E9 is a 10-bit field (bits 0-7 in byte 5, bits 8-9 in byte 6) → **511 A**, about
-  155 kW at 303 V.
-- `CHG_Pwr` is a 12-bit field at 25 W scale → **102.375 kW**.
-
-The arbitrary limits were removed: `CCSI_Spnt` widened from `uint8_t` to `uint16_t`, the hardcoded
-`>150 A` clamp dropped, and the `CHG_Pwr` forecast driven from `MIN(PwrCcsMax, BMS_MaxInput)` rather
-than a constant 44 kW. `FC_Cur`'s high bits were packed with `>>12` instead of `>>8`, which was correct
-only while the setpoint could not exceed 255 — widening the type without fixing that would have
-transmitted 330 A as 74 A. The ramp is ±1 A per 100 ms, so a 330 A request takes about 33 s to reach.
-
-One real defect was fixed alongside: the decrements in `CCS_Pwr_Con()` had no zero floor, so an
-end-of-charge taper wrapped `0 → 255` on an unsigned counter and then walked back down from the clamp
-instead of settling at zero. The `>250 → 0` guard in the original was written for that case but sat
-below the `>150` clamp, which rewrote 255 before it could fire.
+| Field | Limit |
+|---|---|
+| i3LIM `FC_Cur` (0x3E9, 10 bits) | 511 A |
+| i3LIM `CHG_Pwr` (12 bits at 25 W) | 102.375 kW |
+| Foccci `CCS_Ireq` | 16 bits |
 
 ## Terminal
 
-- `pedump` — journal state plus both tables, by temperature and SOC row.
-- `pereset` — restore the prefill in RAM and queue a save for the next shutdown.
+| Command | Action |
+|---|---|
+| `pedump` | prints generation, page, slot, dirty flag, `BMS_Rpack`, `BMS_LimSrc` and both tables |
+| `pereset` | loads the prefill and requests a save at the next `MOD_OFF` |
 
 ## Operating envelope
 
-Discharge limit in kW at SOC-consistent OCV, prefill tables, against a `PwrMotMax` of 150 kW. Values
-below that are where the estimator overrides the preference:
+At rest, balanced pack, prefill tables, `BMS_VsagLimit` 2.6 V, `BMS_VdragLimit` 4.2 V, no thermal
+ramps (`power_grapher.py`). `*` marks a value below `PwrMotMax` 150 kW.
 
-```
-        SOC:    90%    70%    50%    30%    20%    10%     5%     2%
-   -10 C        246    225    202    167    152   *134   *121   *106
-     0 C        356    330    300    244    218    184    161   *144
-    25 C        574    514    451    381    345    296    259    222
-    40 C        688    610    528    452    412    355    311    266
-```
+Discharge, kW:
 
-With one cell diverging below the pack average, at 25 °C:
+| T | 90 % | 70 % | 50 % | 30 % | 20 % | 10 % | 5 % | 2 % |
+|---|---|---|---|---|---|---|---|---|
+| -10 °C | *129 | *123 | *111 | *100 | *91 | *78 | *54 | *38 |
+| 0 °C | 188 | 178 | 162 | *146 | *134 | *116 | *81 | *58 |
+| 15 °C | 217 | 210 | 199 | 188 | 172 | *150 | *106 | *77 |
+| 25 °C | 231 | 224 | 212 | 202 | 194 | 175 | *125 | *90 |
+| 40 °C | 242 | 234 | 223 | 212 | 205 | 194 | *145 | *106 |
 
-```
-  offset:  90%    70%    50%    30%    20%    10%     5%     2%
-  -0.20 V  500    438    372    305    270    222    185    152
-  -0.40 V  426    362    294    228    195    152   *128    *94
-  -0.60 V  352    285    216    155   *134    *94    *53      0
-```
+Discharge at 25 °C with one cell below the pack OCV, kW:
 
-Sag protection therefore engages in three situations: cold below ~20 % SOC, near-empty, or a
-diverging cell. With a healthy pack at moderate temperature `PwrMotMax` is the binding limit and
-`BMS_MaxOutput` reads high without reaching the CAN bus. Bench testing should target the cold and
-low-SOC cases; a normal drive will not exercise it.
+| Offset | 90 % | 70 % | 50 % | 30 % | 20 % | 10 % | 5 % | 2 % |
+|---|---|---|---|---|---|---|---|---|
+| -0.20 V | 216 | 209 | 197 | 184 | 166 | *141 | *98 | *64 |
+| -0.40 V | 202 | 194 | 173 | *146 | *129 | *104 | *68 | *36 |
+| -0.60 V | 184 | 167 | *136 | *105 | *88 | *61 | *34 | *3 |
 
-Raising `BMS_VsagLimit` toward `BMS_VminLimit` (3.0 V) moves engagement up to roughly 10 % SOC at
-room temperature.
+Regen / charge, kW:
 
-## Known limitations
-
-- R pegs at the 4C axis end whenever the predicted current exceeds 4C; the reported figure is
-  optimistic there. Not reached in practice because the preference binds first in that region.
-- The prefill has identical R for 10 % and 90 % SOC, so that axis carries no information until
-  learned.
-- `BMS_Rpack` reports the discharge operating point only.
-- `BMS_Vmin`/`BMS_Vmax` are labelled `"mV"` but `simpbms` publishes volts, so the reader sniffs on
-  `raw > 10`.
-- `BMS_VdragLimit` 4.2 V stores as 4.1875 V — `FP_FROMFLT` truncates at 1/32. Conservative.
-- Learning is bounded to a factor of 3 around the prefill, per bin.
-- `PwrAcMax` (AC charge) is still in watts while every other preference is in kW.
-- `IdcTerm` and `CCS_ICmd` were removed as part of this work; both had only commented-out references.
-- `Foccci.cpp` was not given the same treatment. It already uses a `uint16_t` setpoint and has its
-  `>150 A` clamp commented out, but it still carries the unfloored decrements and a live
-  `>250 → 0` guard, which there is reachable and caps it at 250 A. It also still reads
-  `BMS_ChargeLim` rather than `BMS_MaxInput`.
+| T | 90 % | 80 % | 70 % | 50 % | 30 % | 20 % | 10 % |
+|---|---|---|---|---|---|---|---|
+| 0 °C | 13/4 | 19/5 | 24/8 | 38/11 | 49/21 | 50/26 | 53/29 |
+| 5 °C | 18/5 | 25/7 | 32/9 | 51/14 | 66/26 | 67/33 | 72/36 |
+| 10 °C | 24/6 | 34/8 | 43/11 | 69/17 | 90/32 | 91/40 | 97/44 |
+| 15 °C | 33/7 | 46/10 | 59/14 | 93/21 | 122/39 | 124/49 | 133/54 |
+| 25 °C | 57/10 | 80/14 | 102/20 | 164/30 | 215/57 | 221/71 | 238/79 |
+| 40 °C | 68/16 | 94/24 | 120/33 | 191/50 | 250/95 | 256/119 | 276/134 |

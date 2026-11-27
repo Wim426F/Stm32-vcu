@@ -50,7 +50,7 @@ bool SimpBMS::ChargeAllowed()
    // Refuse to charge if the voltage or temperature is out of range.
    if(maxCellV > Param::GetFloat(Param::BMS_VmaxLimit)) return false;
    if(minCellV < Param::GetFloat(Param::BMS_VminLimit)) return false;
-   if(maxTempC > Param::GetFloat(Param::BMS_TmaxLimit)) return false;
+   if(maxTempC > Param::GetFloat(Param::BMS_TmaxChg)) return false;
    if(minTempC < Param::GetFloat(Param::BMS_TminLimit)) return false;
 
    // Refuse to charge if the current limit is zero.

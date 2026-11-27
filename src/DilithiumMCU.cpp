@@ -43,13 +43,14 @@ bool DilithiumMCU::ChargeAllowed()
    if (timeoutCounterBMS < 1) return false;
 
    // Refuse to charge if the voltage or temperature is out of range.
-   // Either limit of each pair may be set inside the other, and the inner one is a normal operating
-   // point, so the hard stops sit at the outer ones.
+   // Either upper limit may be set inside the other, and the inner one is a normal operating
+   // point, so the hard stop sits at the outer one. The lower stop is the cell's under-voltage
+   // protection (LG INR21700-M50LT spec 2.11): a pack resting below the user limits still charges.
    float vHigh = MAX(Param::GetFloat(Param::BMS_VmaxLimit), Param::GetFloat(Param::BMS_VdragLimit));
-   float vLow = MIN(Param::GetFloat(Param::BMS_VminLimit), Param::GetFloat(Param::BMS_VsagLimit));
+   static const float V_CELL_UVP = 2.00f;
    if ((maxCellV/1000.0f) > vHigh) return false;
-   if ((minCellV/1000.0f) < vLow) return false;
-   if (maxTempC > Param::GetFloat(Param::BMS_TmaxLimit)) return false;
+   if ((minCellV/1000.0f) < V_CELL_UVP) return false;
+   if (maxTempC > Param::GetFloat(Param::BMS_TmaxChg)) return false;
    if (minTempC < Param::GetFloat(Param::BMS_TminLimit)) return false;
 
    // Refuse to charge if the current limit is zero.

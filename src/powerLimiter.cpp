@@ -21,6 +21,7 @@
 #include "params.h"
 #include "hwdefs.h"
 #include "my_math.h"
+#include <math.h>
 #include <libopencm3/stm32/flash.h>
 #include <libopencm3/stm32/desig.h>
 #include <libopencm3/stm32/crc.h>
@@ -48,45 +49,71 @@ namespace PowerLimiter
 
 /* ---- table geometry: 5 temperatures x 3 SOC x 5 C-rates, per direction ---- */
 static const int NT = 5;
-static const int NS = 3;
+static const int NS = 4;
 static const int NC = 5;
-static const int NBINS = NT * NS * NC; // 75
-static const float TAXIS[NT] = { -10.0f, 0.0f, 25.0f, 40.0f, 50.0f };
-static const float SAXIS[NS] = { 10.0f, 50.0f, 90.0f };
+static const int NBINS = NT * NS * NC; // 100
+static const float TAXIS[NT] = { -10.0f, 0.0f, 20.0f, 35.0f, 50.0f };
+// R doubles from 10 % to 0 %; aged cells rise from 30 % down
+static const float SAXIS[NS] = { 0.0f, 10.0f, 30.0f, 90.0f };
 static const float CAXIS[NC] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f };
 
 /* ---- learning ---- */
 static const float EWMA_ALPHA = 0.05f;   // heavy: pack IR moves over months
 static const float R_MIN = 8.0f;         // mOhm, pack
-static const float R_MAX = 2000.0f;
-static const float R_OUTLIER = 3.0f;     // reject > 3x or < 1/3 of the stored bin
-static const float I_REST = 8.0f;        // |idc| under this counts as resting
+static const float R_OUTLIER = 3.0f;     // reject > 3x or < 1/3 of the prefill bin
+static const float T_NODE_BAND = 2.0f;   // K, learn only this close to a temperature node
 static const float I_LEARN_MIN = 15.0f;  // need this much load to measure at all
 static const float I_STABLE_BAND = 8.0f; // peak-to-peak allowed across the window
 static const float DI_MIN = 25.0f;       // plateau-to-plateau step worth using
 static const float DV_CELL_MIN = 0.005f; // below this it is all measurement noise
 static const uint16_t STABLE_TICKS = 15; // 1.5 s
-static const uint16_t REST_TICKS = 20;   // 2.0 s
-static const uint16_t REF_MAX_AGE = 600; // 60 s - a reference older than this has
+static const uint16_t STABLE_TICKS_HI = 5;// 0.5 s at 1C and above: high current comes in
+                                         // short peaks, and R grows ~6 % from 0.2 to 4 s
+static const uint16_t REF_MAX_AGE = 300; // 30 s - a reference older than this has
                                          // drifted in OCV and would inflate R
 static const float REF_MAX_DSOC = 2.0f;  // ...as has one taken 2% of SOC ago
 
 /* ---- output ---- */
 static const float PWR_SLEW = 5.0f;      // kW per tick -> 50 kW/s
 static const float PWR_NOLIMIT = 1000.0f;// "battery imposes nothing" - consumers clamp
-static const float COLD_SPAN = 5.0f;     // degrees below BMS_TminLimit to reach 0 charge
-static const float T_HOT_FLOOR_SPAN = 0.1f;
+static const float I_NOCAP = 1.0e6f;     // A, HeadroomCurrent without a current cap
 
 /* Series cell count. Fixed for this pack; DilithiumMCU hardcodes the same 73. */
 static const float CELLS = 73.0f;
 
-enum LimSrc { SRC_NONE = 0, SRC_SAG, SRC_DRAG, SRC_HOT, SRC_COLD, SRC_NODATA };
+/* ---- plating ----
+ * Charge-mode current ceiling against SOC, in C. Tesla Model 3 LR on a 250 kW
+ * Supercharger, same 21700 NMC cell family, hot pack (cells 45 to 59 C):
+ * measured pack current / 221 Ah (Bjorn Nyland). Off either end it holds the end value.
+ * Used as measured: it is the only source for current against SOC. At 80 to 90 % the cells
+ * sat at 4.2 V, so those points are a voltage limit and on the low side of Tesla's map.
+ * The LG M50LT datasheet (0.3C at 0 to 25 C, 0.7C at 25 to 45 C, complete charge) gives no
+ * per-SOC limit; its temperature step implies Ea 25 kJ/mol, confirming the 26 below. */
+static const int NP = 9;
+static const float PSOC[NP] = { 10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f };
+static const float PCRATE[NP] = { 3.08f, 2.71f, 2.17f, 1.67f, 1.13f, 0.90f, 0.72f, 0.51f, 0.34f };
 
-/* ---- flash journal: 2 pages x 6 slots, below the param/CAN pages ---- */
+/* Temperature factor on the coldest cell, Arrhenius: f = exp(-Ea/R * (1/T - 1/Tref)), max 1.
+ * Ea 26 kJ/mol fits plating-free 1C at 20 C and 2C at 40 C (Yang 2018, NMC/graphite).
+ * Tref 50 C is the temperature the curve above was measured at.
+ * f: 0 C 0.17, 10 C 0.25, 20 C 0.37, 30 C 0.53, 40 C 0.74, 50 C 1.0. */
+static const float PLATING_EA_OVER_R = 26000.0f / 8.314f; // K
+static const float PLATING_TREF = 323.15f;                // K
+
+/* Regen reference: a TUNED value, not physics. Same Ea, but f reaches 1 at 25 C instead
+ * of 50 C, which is the charge factor x 2.25. No data gives a safe limit for a regen pulse
+ * of seconds; the 50 C reference comes from sustained charging and allowed only 20 kW at
+ * 15 C / 80 % SOC. 25 C is chosen to match owner reports of Tesla regen (about half on a
+ * cold pack, full once warm). See Power_estimater_idea.md, Plating limit. */
+static const float PLATING_TREF_REGEN = 298.15f;          // K
+
+enum LimSrc { SRC_NONE = 0, SRC_SAG, SRC_DRAG, SRC_HOT, SRC_COLD, SRC_NODATA, SRC_PLATING };
+
+/* ---- flash journal: 2 pages x 4 slots, below the param/CAN pages ---- */
 static const uint32_t PE_MAGIC = 0x52454646u; // 'REFF'
-static const uint16_t PE_VERSION = 1;
-static const int PE_SLOTS = 6;
-static const uint32_t PE_SLOT_SIZE = 320;
+static const uint16_t PE_VERSION = 3;   // 3: T {-10,0,20,35,50}, SOC {0,10,30,90}
+static const int PE_SLOTS = 4;
+static const uint32_t PE_SLOT_SIZE = 416;
 
 struct PeSlot
 {
@@ -100,6 +127,7 @@ struct PeSlot
 };
 
 static_assert(sizeof(PeSlot) <= PE_SLOT_SIZE, "PeSlot does not fit journal slot");
+static_assert(PE_SLOTS * PE_SLOT_SIZE <= FLASH_PAGE_SIZE, "journal slots do not fit a page");
 
 /* Everything the tick needs, read from the param database exactly once. */
 struct Inputs
@@ -115,6 +143,7 @@ struct Inputs
    float idc;      // + charge, - discharge (Dilithium / i3LIM convention)
    float absI;
    float ah;
+   int   mode;
    bool  haveCells;
 };
 
@@ -123,6 +152,7 @@ static float rDis[NBINS];
 static float rChg[NBINS];
 static float pwrDis;
 static float pwrChg;
+static float pwrRegen;
 static float rUsed;
 static float iDisMax;
 static float iChgMax;
@@ -135,9 +165,10 @@ static uint32_t lastGen;
 static int lastPage;
 static int lastSlot;
 
-/* A voltage reference to subtract from the loaded cell voltage. Either an
- * open-circuit sample (rest) or an earlier steady load (plateau). Both go stale:
- * once SOC has moved, the difference is mostly OCV drift, not IR drop. */
+/* An earlier steady load, the voltage reference for the next one. It goes stale:
+ * once SOC has moved, the difference is mostly OCV drift, not IR drop.
+ * No resting reference: a loaded cell keeps building slow polarisation for tens
+ * of seconds, so a step from rest reads 20 % to 70 % above the IR the prefill holds. */
 struct Ref
 {
    bool     valid;
@@ -149,9 +180,7 @@ struct Ref
    bool     charging;
 };
 
-static Ref rest;
 static Ref plat;
-static uint16_t restTicks;
 static uint16_t stableTicks;
 static float iWinLo;
 static float iWinHi;
@@ -249,36 +278,51 @@ static float Lerp(float x, float x0, float x1, float y0, float y1)
 
 /* --------------------------------------------------------------- the tables */
 
+// Starting point for pack R_eff (mOhm), worst-cell basis, discharge.
+// R = 73 x dVmin / dI between two steady loads (plateau method, as Learn()), 422
+// measurements from 11 drive logs: BMS temperature 15.5 C to 24.5 C, VCU SOC 0 % to 93 %,
+// 0.2C to 2.6C. R = R20(SOC) x fT x (1 + 0.09 x (C - 0.5)), least squares on all points.
+// R20 at 20 C / 0.5C, measured: 0 % 96.0, 10 % 52.4, 30 % 46.9, 90 % 49.9.
+// fT: 20 C 1.00; 35 C 0.826, 50 C 0.694 from the measured slope (Ea 9.6 kJ/mol, 90 % range
+//     0 to 18.5), extrapolated; 0 C 1.567, -10 C 2.507 not measured.
+// C: +9 % per C; measured flat to 1.1C, +5 % at 1.6C, +10 % at 2.6C; 3C/4C extrapolated.
+// Axes: T {-10,0,20,35,50}, SOC {0,10,30,90}, C {0.5,1,2,3,4}.
+// Also the anchor for the learning outlier check.
+static const float PREFILL[NT][NS][NC] =
+{
+   { { 240.7f, 251.5f, 273.2f, 294.8f, 316.5f },
+     { 131.4f, 137.3f, 149.1f, 160.9f, 172.7f },
+     { 117.6f, 122.9f, 133.5f, 144.0f, 154.6f },
+     { 125.1f, 130.7f, 142.0f, 153.2f, 164.5f } },
+   { { 150.4f, 157.2f, 170.7f, 184.3f, 197.8f },
+     {  82.1f,  85.8f,  93.2f, 100.6f, 108.0f },
+     {  73.5f,  76.8f,  83.4f,  90.0f,  96.6f },
+     {  78.2f,  81.7f,  88.7f,  95.8f, 102.8f } },
+   { {  96.0f, 100.3f, 109.0f, 117.6f, 126.2f },
+     {  52.4f,  54.8f,  59.5f,  64.2f,  68.9f },
+     {  46.9f,  49.0f,  53.2f,  57.5f,  61.7f },
+     {  49.9f,  52.1f,  56.6f,  61.1f,  65.6f } },
+   { {  79.3f,  82.9f,  90.0f,  97.1f, 104.3f },
+     {  43.3f,  45.2f,  49.1f,  53.0f,  56.9f },
+     {  38.7f,  40.5f,  44.0f,  47.5f,  50.9f },
+     {  41.2f,  43.1f,  46.8f,  50.5f,  54.2f } },
+   { {  66.6f,  69.6f,  75.6f,  81.6f,  87.6f },
+     {  36.4f,  38.0f,  41.3f,  44.5f,  47.8f },
+     {  32.5f,  34.0f,  36.9f,  39.9f,  42.8f },
+     {  34.6f,  36.2f,  39.3f,  42.4f,  45.5f } }
+};
+// Charge (regen) measures 1.11 x discharge on the same logs (20 points, to 0.7C).
+static const float CHG_OVER_DIS = 1.11f;
+
 static void Prefill()
 {
-   // Conservative physics-based starting point for pack R_eff (mOhm).
-   // Axes: T {-10,0,25,40,50}, SOC {10,50,90}, C {0.5,1,2,3,4}.
-   static const float init[NT][NS][NC] =
-   {
-      { { 62.0f, 66.0f, 72.0f, 78.0f, 84.0f },
-        { 54.0f, 58.0f, 64.0f, 70.0f, 76.0f },
-        { 62.0f, 66.0f, 72.0f, 78.0f, 84.0f } },
-      { { 40.0f, 43.0f, 48.0f, 53.0f, 58.0f },
-        { 34.0f, 36.0f, 41.0f, 46.0f, 51.0f },
-        { 40.0f, 43.0f, 48.0f, 53.0f, 58.0f } },
-      { { 22.0f, 24.0f, 28.0f, 32.0f, 36.0f },
-        { 20.0f, 22.0f, 26.0f, 30.0f, 34.0f },
-        { 22.0f, 24.0f, 28.0f, 32.0f, 36.0f } },
-      { { 16.0f, 18.0f, 22.0f, 26.0f, 30.0f },
-        { 15.0f, 17.0f, 21.0f, 25.0f, 29.0f },
-        { 16.0f, 18.0f, 22.0f, 26.0f, 30.0f } },
-      { { 13.0f, 15.0f, 19.0f, 23.0f, 26.0f },
-        { 12.5f, 14.5f, 18.5f, 22.5f, 25.5f },
-        { 13.0f, 15.0f, 19.0f, 23.0f, 26.0f } }
-   };
-
    for (int it = 0; it < NT; it++)
       for (int is = 0; is < NS; is++)
          for (int ic = 0; ic < NC; ic++)
          {
             int i = BinIndex(it, is, ic);
-            rDis[i] = init[it][is][ic];
-            rChg[i] = init[it][is][ic];
+            rDis[i] = PREFILL[it][is][ic];
+            rChg[i] = PREFILL[it][is][ic] * CHG_OVER_DIS;
          }
 }
 
@@ -463,21 +507,25 @@ static void RefAge(Ref* r, const Inputs& in)
       r->valid = false;
 }
 
-/* EWMA the measurement into the single nearest bin. Reject anything that is not
- * within a factor of R_OUTLIER of what that bin already holds - a good
- * measurement never moves pack IR by 3x. */
-static void Learned(float* table, const Inputs& in, float crate, float rMeas)
+/* EWMA the raw measurement into the nearest bin, only when the pack temperature is
+ * within T_NODE_BAND of a temperature node. The lookup interpolates between nodes, so a
+ * value measured between them belongs to neither: a 12 C value in the 20 C node would
+ * add the cold-side slope a second time at 12 C.
+ * Reject a value outside 1/R_OUTLIER..R_OUTLIER x the prefill of the bin. Checked against
+ * the fixed prefill, not the bin itself: against the bin, every accepted high value widens
+ * the window for the next, and the bin can creep up without limit. */
+static void Learned(float* table, float prefillScale, const Inputs& in, float crate, float rMeas)
 {
-   if (rMeas < R_MIN || rMeas > R_MAX) return;
+   int it = Nearest(TAXIS, NT, in.t);
+   if (ABS(in.t - TAXIS[it]) > T_NODE_BAND) return;
 
-   int i = BinIndex(Nearest(TAXIS, NT, in.t),
-                    Nearest(SAXIS, NS, in.soc),
-                    Nearest(CAXIS, NC, crate));
+   int is = Nearest(SAXIS, NS, in.soc);
+   int ic = Nearest(CAXIS, NC, crate);
+   float pre = PREFILL[it][is][ic] * prefillScale;
+   if (rMeas > pre * R_OUTLIER || rMeas < pre / R_OUTLIER) return;
 
-   if (rMeas > table[i] * R_OUTLIER || rMeas < table[i] / R_OUTLIER) return;
-
+   int i = BinIndex(it, is, ic);
    float next = table[i] * (1.0f - EWMA_ALPHA) + rMeas * EWMA_ALPHA;
-   next = MIN(MAX(next, R_MIN), R_MAX);
    if (next != table[i])
    {
       table[i] = next;
@@ -489,21 +537,7 @@ static void Learn(const Inputs& in)
 {
    if (!in.haveCells) return;
 
-   RefAge(&rest, in);
    RefAge(&plat, in);
-
-   /* Resting: refresh the reference only at the same or lower current, so a slow
-    * ramp (AC charger) is measured from before it started, not from I_REST. */
-   if (in.absI < I_REST)
-   {
-      if (restTicks < REST_TICKS) restTicks++;
-      if (restTicks >= REST_TICKS && (!rest.valid || in.absI <= rest.absI))
-         RefUpdate(&rest, in);
-   }
-   else
-   {
-      restTicks = 0;
-   }
 
    /* Stable current means peak-to-peak inside the band across the whole window,
     * which a slow ramp fails - unlike comparing against a fast-tracking filter. */
@@ -525,14 +559,12 @@ static void Learn(const Inputs& in)
       if (stableTicks < 0xFFFF) stableTicks++;
    }
 
-   if (stableTicks < STABLE_TICKS || in.absI < I_LEARN_MIN) return;
+   uint16_t stableNeed = (in.ah > 1.0f && in.absI >= in.ah) ? STABLE_TICKS_HI : STABLE_TICKS;
+   if (stableTicks < stableNeed || in.absI < I_LEARN_MIN) return;
 
    bool charging = in.idc > 0.0f;
-   float rMeas = 0.0f;
-   bool got = false;
 
-   /* Prefer plateau-to-plateau: dV/dI cancels OCV entirely, so it stays honest
-    * even when the pack has moved a long way from any resting sample.
+   /* Plateau-to-plateau: dV/dI cancels OCV entirely.
     * Both deltas are signed and must agree - more current has to mean more
     * voltage drop. If they disagree, OCV drift is outrunning the IR change and
     * the pair is junk, so throw it away rather than abs() it into looking sane. */
@@ -543,28 +575,16 @@ static void Learn(const Inputs& in)
                           : (plat.vMinCell - in.vMinCell);
       if (ABS(di) >= DI_MIN && ABS(dv) >= DV_CELL_MIN && dv * di > 0.0f)
       {
-         rMeas = (ABS(dv) * CELLS * 1000.0f) / ABS(di);
-         got = true;
+         float rMeas = (ABS(dv) * CELLS * 1000.0f) / ABS(di);
+         /* Filed under the higher of the two currents: with the lower one small,
+          * dV/dI is R at the higher current, also on a step down after a peak. */
+         float crate = (in.ah > 1.0f) ? (MAX(in.absI, plat.absI) / in.ah) : CAXIS[0];
+         if (charging)
+            Learned(rChg, CHG_OVER_DIS, in, crate, rMeas);
+         else
+            Learned(rDis, 1.0f, in, crate, rMeas);
       }
    }
-
-   if (!got && rest.valid)
-   {
-      /* Step from the rest current, signed: DC-DC draw at rest adds to a charge step. */
-      float restIdc = rest.charging ? rest.absI : -rest.absI;
-      float di = ABS(in.idc - restIdc);
-      float dv = charging ? (in.vMaxCell - rest.vMaxCell)
-                          : (rest.vMinCell - in.vMinCell);
-      if (di >= I_LEARN_MIN && dv >= DV_CELL_MIN)
-      {
-         rMeas = (dv * CELLS * 1000.0f) / di;
-         got = true;
-      }
-   }
-
-   float crate = (in.ah > 1.0f) ? (in.absI / in.ah) : CAXIS[0];
-   if (got)
-      Learned(charging ? rChg : rDis, in, crate, rMeas);
 
    /* This steady stretch becomes the reference for the next one. */
    RefUpdate(&plat, in);
@@ -576,21 +596,22 @@ static void Learn(const Inputs& in)
 /* How much current drags the worst cell from where it is now to its limit.
  *
  * R depends on C-rate, and the C-rate depends on the answer, so solve it:
- * guess from R at the present rate, recompute the rate, look R up again. Three
- * passes is plenty - without this, a lookup at rest lands on the 0.5C bin (the
- * lowest R in the table) and predicts thousands of amps.
+ * guess from R at the present rate, recompute the rate, look R up again. Four
+ * passes end on the low side of the answer - without this, a lookup at rest lands
+ * on the 0.5C bin (the lowest R in the table) and predicts thousands of amps.
+ * The answer never exceeds iCap, and R comes from the C-rate of the capped answer.
  */
 static float HeadroomCurrent(const float* table, const Inputs& in,
-                             float headCell, float iNow, float* rOut)
+                             float headCell, float iNow, float iCap, float* rOut)
 {
    float crate = (in.ah > 1.0f) ? (in.absI / in.ah) : CAXIS[0];
    float iTotal = iNow;
    float r = R_MIN;
 
-   for (int pass = 0; pass < 3; pass++)
+   for (int pass = 0; pass < 4; pass++)
    {
       r = Lookup(table, in.t, in.soc, crate);
-      iTotal = iNow + (headCell * CELLS) / (r * 0.001f);
+      iTotal = MIN(iNow + (headCell * CELLS) / (r * 0.001f), iCap);
       if (in.ah > 1.0f) crate = iTotal / in.ah;
    }
 
@@ -616,6 +637,7 @@ static void Compute(const Inputs& in)
    {
       pwrDis = PWR_NOLIMIT;
       pwrChg = PWR_NOLIMIT;
+      pwrRegen = PWR_NOLIMIT;
       rUsed = 0.0f;
       iDisMax = 0.0f;
       iChgMax = 0.0f;
@@ -623,10 +645,11 @@ static void Compute(const Inputs& in)
       return;
    }
 
-   float iNowDis = (in.idc < 0.0f) ? -in.idc : 0.0f;
-   float iNowChg = (in.idc > 0.0f) ? in.idc : 0.0f;
+   /* Signed present current per direction: a cell under discharge load sits
+    * below its OCV, so the charge headroom it shows includes that discharge. */
+   float iNowDis = -in.idc;
+   float iNowChg = in.idc;
    float vFloorPack = in.vFloor * CELLS;
-   float vCeilPack = in.vCeil * CELLS;
    int src = SRC_NONE;
 
    /* Discharge: power at the moment the worst cell reaches its floor, so the
@@ -635,59 +658,83 @@ static void Compute(const Inputs& in)
     * floor instead of cutting to 0. */
    float rD;
    float headDis = in.vMinCell - in.vFloor;
-   float dis = HeadroomCurrent(rDis, in, headDis, iNowDis, &rD) * vFloorPack / 1000.0f;
+   float dis = HeadroomCurrent(rDis, in, headDis, iNowDis, I_NOCAP, &rD) * vFloorPack / 1000.0f;
    if (headDis <= 0.0f) src = SRC_SAG;
    rUsed = rD;
 
-   /* Charge: mirror image against the ceiling. */
-   float rC;
+   /* Charge and regen both stop at the ceiling (drag) and both scale with the
+    * plating factor of the coldest cell, regen with the tuned PLATING_TREF_REGEN.
+    * Charge mode is also capped by the SOC
+    * curve: a sustained charge plates at high SOC, a regen pulse of seconds does not. */
+   float tK = in.tMin + 273.15f;
+   float fT = MIN(expf(-PLATING_EA_OVER_R * (1.0f / tK - 1.0f / PLATING_TREF)), 1.0f);
+   float fRegen = MIN(expf(-PLATING_EA_OVER_R * (1.0f / tK - 1.0f / PLATING_TREF_REGEN)), 1.0f);
+
+   int p0, p1;
+   float fp;
+   Bracket(PSOC, NP, in.soc, &p0, &p1, &fp);
+   float iCurve = (PCRATE[p0] + (PCRATE[p1] - PCRATE[p0]) * fp) * in.ah * fT;
+
    float headChg = in.vCeil - in.vMaxCell;
-   float chg = HeadroomCurrent(rChg, in, headChg, iNowChg, &rC) * vCeilPack / 1000.0f;
+   float rC;
+   float iChg = HeadroomCurrent(rChg, in, headChg, iNowChg, iCurve, &rC);
+   float rR;
+   float iRegen = HeadroomCurrent(rChg, in, headChg, iNowChg, I_NOCAP, &rR) * fRegen;
+   rR = Lookup(rChg, in.t, in.soc, ABS(iRegen) / MAX(in.ah, 1.0f));
    if (headChg <= 0.0f && src == SRC_NONE) src = SRC_DRAG;
 
-   /* Hot ramp on tMax. Both directions taper to BMS_PwrHot, not to zero.
-    * 152 kW at 40 C = 502 A = 5.6 kW I2R. Must already be derating.
-    *  15 kW at 50 C =  50 A =   31 W    = Negligible.
+   /* Power at the pack voltage this current produces, so a charger that divides
+    * by its measured pack voltage gets the same current back. Built on the lowest
+    * cell, so it reads a little low and the current comes out a little low. */
+   float vChgPack = MAX(in.vMinCell * CELLS + (iChg - in.idc) * rC * 0.001f, 1.0f);
+   float vRegenPack = MAX(in.vMinCell * CELLS + (iRegen - in.idc) * rR * 0.001f, 1.0f);
+   float chg = iChg * vChgPack / 1000.0f;
+   float regen = iRegen * vRegenPack / 1000.0f;
+
+   /* Hot ramp on tMax, BMS_TderateSpan long, ending at each direction's maximum:
+    * BMS_TmaxLimit for discharge, BMS_TmaxChg for charge and regen (the datasheet
+    * allows a lower cell temperature while charging). Tapers to BMS_PwrHot, not to zero.
     * 15 kW holds highway speed, or adds 15 kWh/h with charging.
-    * Charge starts earlier (BMS_TderateChg) because cell temp sensor lags.
     * Sag/drag still pull below the floor - TempDerate only reduces. */
-   float tHotLimit = Param::GetFloat(Param::BMS_TmaxLimit);
+   float span = Param::GetFloat(Param::BMS_TderateSpan);
    float pwrHot = Param::GetFloat(Param::BMS_PwrHot);
+   float tMaxDis = Param::GetFloat(Param::BMS_TmaxLimit);
+   float tMaxChg = Param::GetFloat(Param::BMS_TmaxChg);
 
-   float tDisStart = Param::GetFloat(Param::BMS_Tderate);
-   if (tHotLimit < tDisStart + T_HOT_FLOOR_SPAN)
-      tDisStart = tHotLimit - T_HOT_FLOOR_SPAN;
-
-   float tChgStart = Param::GetFloat(Param::BMS_TderateChg);
-   if (tHotLimit < tChgStart + T_HOT_FLOOR_SPAN)
-      tChgStart = tHotLimit - T_HOT_FLOOR_SPAN;
-
-   if (in.tMax > tDisStart)
+   if (in.tMax > tMaxDis - span)
    {
-      dis = TempDerate(dis, in.tMax, tDisStart, tHotLimit, pwrHot);
+      dis = TempDerate(dis, in.tMax, tMaxDis - span, tMaxDis, pwrHot);
       if (src == SRC_NONE) src = SRC_HOT;
    }
-   if (in.tMax > tChgStart)
+   if (in.tMax > tMaxChg - span)
    {
-      chg = TempDerate(chg, in.tMax, tChgStart, tHotLimit, pwrHot);
+      chg = TempDerate(chg, in.tMax, tMaxChg - span, tMaxChg, pwrHot);
+      regen = TempDerate(regen, in.tMax, tMaxChg - span, tMaxChg, pwrHot);
       if (src == SRC_NONE) src = SRC_HOT;
    }
 
-   /* Cold, charge only. Plating is real, but discharge must stay available so
-    * the car can be driven. Ramped, not stepped, so regen does not vanish in a
-    * single tick mid-drive. */
+   /* Cold, charge and regen only, the same span below BMS_TminLimit. Discharge must
+    * stay available so the car can be driven. Ramped, not stepped, so regen does not
+    * vanish in a single tick mid-drive. */
    float tColdLimit = Param::GetFloat(Param::BMS_TminLimit);
    if (in.tMin < tColdLimit)
    {
-      float ramp = (in.tMin <= tColdLimit - COLD_SPAN)
-                   ? 0.0f
-                   : Lerp(in.tMin, tColdLimit, tColdLimit - COLD_SPAN, chg, 0.0f);
-      chg = MIN(chg, ramp);
+      float k = (in.tMin <= tColdLimit - span)
+                ? 0.0f
+                : Lerp(in.tMin, tColdLimit, tColdLimit - span, 1.0f, 0.0f);
+      chg *= k;
+      regen *= k;
       if (src == SRC_NONE) src = SRC_COLD;
    }
 
+   /* Last in line: below 25 C the regen plating factor is always below 1, so in drive
+    * it would otherwise hide every other source. */
+   bool plating = (in.mode == MOD_CHARGE) ? (iChg >= iCurve) : (fRegen < 1.0f);
+   if (plating && src == SRC_NONE) src = SRC_PLATING;
+
    dis = MAX(dis, 0.0f);
    chg = MAX(chg, 0.0f);
+   regen = MAX(regen, 0.0f);
 
    /* Slew the limit upwards only. The worst cell is noisy and the DU sees this
     * every 500 ms, so ramping up stops us chasing that noise - but a reduction
@@ -696,11 +743,12 @@ static void Compute(const Inputs& in)
     * pack unprotected while a 1000 kW placeholder ramps down. */
    pwrDis = (dis < pwrDis) ? dis : MIN(dis, pwrDis + PWR_SLEW);
    pwrChg = (chg < pwrChg) ? chg : MIN(chg, pwrChg + PWR_SLEW);
+   pwrRegen = (regen < pwrRegen) ? regen : MIN(regen, pwrRegen + PWR_SLEW);
 
-   /* The same limits as current, for display. Divided by the limit voltage
-    * because that is the voltage the power figure was built on. */
+   /* The same limits as current, for display. Divided by the voltage the power
+    * figure was built on. */
    iDisMax = pwrDis * 1000.0f / vFloorPack;
-   iChgMax = pwrChg * 1000.0f / vCeilPack;
+   iChgMax = pwrChg * 1000.0f / vChgPack;
    limSrc = src;
 }
 
@@ -727,13 +775,14 @@ void Task100Ms()
    in.absI = ABS(in.idc);
 
    in.ah = Param::GetFloat(Param::BMS_CapActual);
+   in.mode = Param::GetInt(Param::opmode);
 
    Learn(in);
    Compute(in);
 
    /* In charge mode, a hold or a lost BMS means 0 W. NODATA's "no limit" is
     * for driving only. Every charger obeys BMS_MaxInput, so this gates them all. */
-   int mode = Param::GetInt(Param::opmode);
+   int mode = in.mode;
    if (mode == MOD_CHARGE && (Param::GetInt(Param::ChgHold) != 0 || !in.haveCells))
    {
       pwrChg = 0.0f;
@@ -754,6 +803,7 @@ void Task100Ms()
 
    Param::SetFloat(Param::BMS_MaxOutput, pwrDis);
    Param::SetFloat(Param::BMS_MaxInput, pwrChg);
+   Param::SetFloat(Param::BMS_MaxRegen, pwrRegen);
    Param::SetFloat(Param::BMS_IdisMax, iDisMax);
    Param::SetFloat(Param::BMS_IchgMax, iChgMax);
    Param::SetFloat(Param::BMS_Rpack, rUsed);
@@ -775,12 +825,11 @@ void Init()
    LoadFromFlash();
    persistWanted = false;
    prevMode = -1;
-   rest.valid = false;
    plat.valid = false;
-   restTicks = 0;
    stableTicks = 0;
    pwrDis = 0.0f;
    pwrChg = 0.0f;
+   pwrRegen = 0.0f;
    iDisMax = 0.0f;
    iChgMax = 0.0f;
    limSrc = SRC_NODATA;

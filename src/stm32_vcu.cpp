@@ -312,7 +312,7 @@ static void Ms200Task(void)
     {
         bool bmsValid = Param::GetFloat(Param::BMS_Vmin) > 0; //BMS driver zeroes cell values on timeout
         bool tempOk = Param::GetFloat(Param::BMS_Tmin) >= Param::GetFloat(Param::BMS_TminLimit) &&
-                      Param::GetFloat(Param::BMS_Tmax) <= Param::GetFloat(Param::BMS_TmaxLimit);
+                      Param::GetFloat(Param::BMS_Tmax) <= Param::GetFloat(Param::BMS_TmaxChg);
         // Target: the SOC limit, or the highest cell at rest reaches VmaxLimit
         bool full = Param::GetFloat(Param::SOC) >= Param::GetFloat(Param::ChgSocLimit) ||
                     (bmsValid && Param::GetFloat(Param::BMS_OcvMax) >= Param::GetFloat(Param::BMS_VmaxLimit) * 1000.0f);
@@ -793,10 +793,10 @@ static void Ms10Task(void)
         ErrorMessage::UnpostAll();
         // Only leave RUN once it is physically safe to open the contactors:
         //  speed<50  : rotor essentially stopped, back-EMF can't overvolt the inverter (hard interlock)
-        //  dir 0/2   : selector in Neutral or Park - driver intent, and redundancy if the speed signal drops out
-        if(!selectedVehicle->Ready() &&
-           ABS(Param::GetInt(Param::speed)) < 50 &&
-           (Param::GetInt(Param::dir) == Neutral || Param::GetInt(Param::dir) == Park))
+        // Exit on key off, or on an empty pack: BMS_MaxOutput 0 at standstill means the
+        // lowest cell rests at BMS_VsagLimit. The lever snaps to Park on MOD_OFF.
+        if((!selectedVehicle->Ready() || Param::GetFloat(Param::BMS_MaxOutput) <= 0) &&
+           ABS(Param::GetInt(Param::speed)) < 50)
         {
             opmode = MOD_SHUTDOWN_REQUEST;
             shutdownReq=150; //(150 x 10ms = 1.5s) let HV devices wind down before contactors open

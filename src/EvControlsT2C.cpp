@@ -40,7 +40,7 @@ enum DiGear {
 
 #define NEUTRAL_RPM_THRESHOLD 20 // motor RPM below which it's safe to shift the T2C drive unit to neutral
 
-static const float MIN_POWER_LIMIT_KW = 1.0f; // Lower bound  non zero otherwise DU treats it as a fault.
+static const float MIN_REGEN_LIMIT_KW = 1.0f; // The DU faults on a 0 kW limit and latches until a key cycle.
 static const float MAX_POWER_LIMIT_KW = 650.0f; // 0x696 is 16bit so 655.35 kW is the largest value that fits.
 
 EvControlsT2C::EvControlsT2C()
@@ -240,17 +240,17 @@ void EvControlsT2C::Task100Ms()
         if (opmode == MOD_RUN) {
             // Power and Regen Control (ID 0x696).
             // PwrMotMax/PwrRegenMax are the user's preference, a hard plateau.
-            // BMS_MaxOutput/MaxInput are what the battery can actually take, from
+            // BMS_MaxOutput/MaxRegen are what the battery can actually take, from
             // the power estimator, and may only pull us below the preference.
             float max_power = MIN(Param::GetFloat(Param::PwrMotMax),
                                   Param::GetFloat(Param::BMS_MaxOutput));
             float max_regen = MIN(Param::GetFloat(Param::PwrRegenMax),
-                                  Param::GetFloat(Param::BMS_MaxInput));
+                                  Param::GetFloat(Param::BMS_MaxRegen));
 
-            // The DU faults on a 0 kW limit, so never command exactly zero - a
-            // momentary BMS dropout should derate, not kill the drive unit.
-            max_power = MIN(MAX(max_power, MIN_POWER_LIMIT_KW), MAX_POWER_LIMIT_KW);
-            max_regen = MIN(MAX(max_regen, MIN_POWER_LIMIT_KW), MAX_POWER_LIMIT_KW);
+            // A 0 kW discharge limit (empty pack) faults the DU on purpose: it coasts until
+            // a key cycle. Regen is 0 on a full or cold pack, so it never goes below 1 kW.
+            max_power = MIN(MAX(max_power, 0.0f), MAX_POWER_LIMIT_KW);
+            max_regen = MIN(MAX(max_regen, MIN_REGEN_LIMIT_KW), MAX_POWER_LIMIT_KW);
             Param::SetFloat(Param::maxPower, max_power);
             
             /* REMOVE . 
