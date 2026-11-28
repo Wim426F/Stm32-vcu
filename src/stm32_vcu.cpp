@@ -135,6 +135,9 @@ static uint16_t ChgDur_tmp;
 static uint32_t ChgTicks=0,ChgTicks_1Min=0;
 static bool StartSig=false;
 static bool ACrequest=false;
+// Why the last charge ended, latched until the next one reaches MOD_CHARGE. Matches CHGSTOPREASONS.
+enum { STOP_NONE, STOP_BUTTON, STOP_BMS, STOP_VOLT, STOP_SOCLIMIT, STOP_VMAXLIMIT, STOP_TIMER, STOP_PORT, STOP_PRECHARGE, STOP_DISABLED };
+static int chgStopReason = STOP_NONE;
 static bool initbyStart=false;
 static bool initbyCharge=false;
 static bool OutlanderCAN=false;
@@ -240,6 +243,7 @@ static void Ms200Task(void)
             if(ChgTicks==0)
             {
                 RunChg=false; //end charge if still charging once timer expires.
+                if(chgStopReason == STOP_NONE) chgStopReason = STOP_TIMER;
                 ChgTicks = (GetInt(Param::Chg_Dur)*300);//recharge the tick timer
             }
 
@@ -283,7 +287,6 @@ static void Ms200Task(void)
         Param::SetInt(Param::chgtyp,OFF);
         chargeMode = false;  //no charge mode
     }
-
     //in chademo , we do not want to run the 200ms task unless in dc charge mode
     if(targetChgint == ChargeInterfaces::Chademo && chargeModeDC) selectedChargeInt->Task200Ms();
     //In case of the LIM we want to send it all the time if lim in use
@@ -308,14 +311,16 @@ static void Ms200Task(void)
     static int chgHold = HOLD_NONE;
     static int bmsFaultTicks = 0;
     static int fullTicks = 0;
+    static int fullReason = STOP_NONE;
     if(opmode==MOD_CHARGE)
     {
         bool bmsValid = Param::GetFloat(Param::BMS_Vmin) > 0; //BMS driver zeroes cell values on timeout
         bool tempOk = Param::GetFloat(Param::BMS_Tmin) >= Param::GetFloat(Param::BMS_TminLimit) &&
                       Param::GetFloat(Param::BMS_Tmax) <= Param::GetFloat(Param::BMS_TmaxChg);
         // Target: the SOC limit, or the highest cell at rest reaches VmaxLimit
-        bool full = Param::GetFloat(Param::SOC) >= Param::GetFloat(Param::ChgSocLimit) ||
-                    (bmsValid && Param::GetFloat(Param::BMS_OcvMax) >= Param::GetFloat(Param::BMS_VmaxLimit) * 1000.0f);
+        bool socFull = Param::GetFloat(Param::SOC) >= Param::GetFloat(Param::ChgSocLimit);
+        bool vmaxFull = bmsValid && Param::GetFloat(Param::BMS_OcvMax) >= Param::GetFloat(Param::BMS_VmaxLimit) * 1000.0f;
+        bool full = socFull || vmaxFull;
 
         if(bmsValid && !tempOk)
         {
@@ -331,10 +336,12 @@ static void Ms200Task(void)
         fullTicks = full ? fullTicks + 1 : 0;
         if(fullTicks >= CHG_CONFIRM_TICKS)
         {
+            if(fullReason == STOP_NONE) fullReason = socFull ? STOP_SOCLIMIT : STOP_VMAXLIMIT; //which target came first
             if(chargeModeDC)
             {
                 RunChg=false;//end charge, the station session is over
                 ChgLck=true;
+                if(chgStopReason == STOP_NONE) chgStopReason = fullReason;
             }
             else chgHold = HOLD_FULL; //latched until charge mode ends
         }
@@ -347,6 +354,8 @@ static void Ms200Task(void)
         {
             RunChg=false;//end charge
             ChgLck=true;//set charge lockout flag
+            if(chgStopReason == STOP_NONE)
+                chgStopReason = stopButton ? STOP_BUTTON : (bmsFaultTicks >= CHG_CONFIRM_TICKS) ? STOP_BMS : STOP_VOLT;
         }
     }
     else
@@ -354,8 +363,31 @@ static void Ms200Task(void)
         chgHold = HOLD_NONE;
         bmsFaultTicks = 0;
         fullTicks = 0;
+        fullReason = STOP_NONE;
     }
     Param::SetInt(Param::ChgHold, chgHold);
+
+    // Where the charge flow is, read from the flags above. Matches CHGSTATES.
+    enum { CS_IDLE, CS_DISABLED, CS_LOCKED, CS_REQUESTED, CS_PRECHARGE, CS_CHARGING, CS_WAITTEMP, CS_FULL };
+    static int prevChgOpmode = MOD_OFF;
+    if(opmode==MOD_CHARGE && prevChgOpmode!=MOD_CHARGE) chgStopReason = STOP_NONE; //a new charge has started
+    prevChgOpmode = opmode;
+    // Charge mode fell away while charging and no stop point named a reason: unplugged
+    // after Full, the port or charger ended the session, or the user disabled it
+    // (web interface, PP unplugged).
+    if(opmode==MOD_CHARGE && !chargeMode && chgStopReason == STOP_NONE)
+        chgStopReason = (chgHold==HOLD_FULL) ? fullReason : RunChg ? STOP_PORT : STOP_DISABLED;
+    bool plugged = Param::GetInt(Param::PlugDet) || chargeModeDC;
+    int chgState;
+    if(opmode==MOD_CHARGE)
+        chgState = (chgHold==HOLD_WAITTEMP) ? CS_WAITTEMP : (chgHold==HOLD_FULL) ? CS_FULL : CS_CHARGING;
+    else if(opmode==MOD_PRECHARGE && chargeMode) chgState = CS_PRECHARGE;
+    else if(!plugged || opmode==MOD_RUN) chgState = CS_IDLE;
+    else if(ChgLck) chgState = CS_LOCKED;
+    else if(!RunChg) chgState = CS_DISABLED;
+    else chgState = CS_REQUESTED; //plugged and enabled, waiting for the port, the charger or HV
+    Param::SetInt(Param::ChgState, chgState);
+    Param::SetInt(Param::ChgStopReason, chgStopReason);
     if(opmode==MOD_RUN)
     {
         ChgLck=false;//reset charge lockout flag when we drive off
@@ -751,6 +783,7 @@ static void Ms10Task(void)
                 DigIo::prec_out.Clear();
                 ErrorMessage::Post(ERR_PRECHARGE);
                 opmode = MOD_PCHFAIL;
+                if(initbyCharge) chgStopReason = STOP_PRECHARGE;
             }  
         }
         Param::SetInt(Param::opmode, opmode);

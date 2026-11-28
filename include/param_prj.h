@@ -162,6 +162,8 @@
     VALUE_ENTRY(opmode,        OPMODES,             2002 ) \
     VALUE_ENTRY(chgtyp,        CHGTYPS,             2003 ) \
     VALUE_ENTRY(ChgHold,       CHGHOLDS,            2131 ) \
+    VALUE_ENTRY(ChgState,      CHGSTATES,           2135 ) \
+    VALUE_ENTRY(ChgStopReason, CHGSTOPREASONS,      2136 ) \
     VALUE_ENTRY(Voltspnt,      "V",                 2132 ) \
     VALUE_ENTRY(lasterr,       errorListString,     2004 ) \
     VALUE_ENTRY(status,        STATUS,              2005 ) \
@@ -274,7 +276,7 @@
     VALUE_ENTRY(VehLockSt,     ONOFF,               2100 ) \
     VALUE_ENTRY(DriverDoorSt,  DMODES,              2112 ) \
 
-//Next value Id: 2135
+//Next value Id: 2137
 
 //////////
 
@@ -299,6 +301,8 @@
 #define DOW          "0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat"
 #define CHGTYPS      "0=Off, 1=AC, 2=DCFC"
 #define CHGHOLDS     "0=None, 1=WaitTemp, 2=Full"
+#define CHGSTATES    "0=Idle, 1=Disabled, 2=Locked, 3=Requested, 4=Precharge, 5=Charging, 6=WaitTemp, 7=Full"
+#define CHGSTOPREASONS "0=None, 1=StopButton, 2=BmsRefused, 3=VoltSetpoint, 4=SocLimit, 5=VmaxLimit, 6=Timer, 7=PortDropped, 8=PrechargeFail, 9=Disabled"
 #define DCDCTYPES    "0=NoDCDC, 1=TeslaG2"
 #define STATUS       "0=None, 1=UdcLow, 2=UdcHigh, 4=UdcBelowUdcSw, 8=UdcLim, 16=EmcyStop, 32=MProt, 64=PotPressed, 128=TmpHs, 256=WaitStart, 512=IsoFault"
 #define CCS_STATUS   "0=NotRdy, 1=ready, 2=SWoff, 3=interruption, 4=Prech, 5=insulmon, 6=estop, 7=malfunction, 15=invalid"
