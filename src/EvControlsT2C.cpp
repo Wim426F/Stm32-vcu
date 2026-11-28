@@ -43,6 +43,10 @@ enum DiGear {
 static const float MIN_REGEN_LIMIT_KW = 1.0f; // The DU faults on a 0 kW limit and latches until a key cycle.
 static const float MAX_POWER_LIMIT_KW = 650.0f; // 0x696 is 16bit so 655.35 kW is the largest value that fits.
 
+// DU faults shown as the engine light, one per message so neither clears the other.
+static bool alertFault = false; // 0x35A
+static bool limpFault = false;  // 0x3A5
+
 EvControlsT2C::EvControlsT2C()
 {
 }
@@ -55,6 +59,7 @@ void EvControlsT2C::SetCanInterface(CanHardware* c)
     can->RegisterUserMessage(0x126);
     can->RegisterUserMessage(0x315);
     can->RegisterUserMessage(0x35A);
+    can->RegisterUserMessage(0x3A5);
     can->RegisterUserMessage(0x118);
 }
 
@@ -134,8 +139,16 @@ void EvControlsT2C::DecodeCAN(int id, uint32_t data[2])
     case 0x35A: { // ID35A_DI_alertMatrix3
         // bytes[1] & 0x05: DI_a137_noCapableDriveUnits (bit 8) | DI_a139_rearUnitDisabled (bit 10)
         // bytes[3] & 0x0A: DI_a154_resolver (bit 25) | DI_a156_currentObserver (bit 27)
-        bool motorFault = (bytes[1] & 0x05) || (bytes[3] & 0x0A);
-        Param::SetInt(Param::errlights, motorFault ? 8 : 0); // Set engine warn light in dashboard
+        alertFault = (bytes[1] & 0x05) || (bytes[3] & 0x0A);
+        Param::SetInt(Param::errlights, (alertFault || limpFault) ? 8 : 0); // Set engine warn light in dashboard
+        break;
+        }
+
+    case 0x3A5: { // ID3A5_DIS_alertMatrix1
+        // bytes[7] & 0x20: DIS_a062_systemLimpMode (bit 61). Set 0.5 s after the DU parks itself
+        // while enabled (D or R to P) and held until a key cycle. Torque is capped at about 900 Nm.
+        limpFault = bytes[7] & 0x20;
+        Param::SetInt(Param::errlights, (alertFault || limpFault) ? 8 : 0); // Set engine warn light in dashboard
         break;
         }
     }
@@ -314,7 +327,8 @@ void EvControlsT2C::setGear()
         expectedGear = DI_GEAR_R;
     }
 
-    if (actualGear == expectedGear) return; // DU is already in the requested gear
+    // The DU parks itself at standstill and leaves N for P within 0.5 s, so P also completes a neutral request.
+    if (actualGear == expectedGear || (expectedGear == DI_GEAR_N && actualGear == DI_GEAR_P)) return;
 
     uint8_t bytes[8] = {shift_command, 0xBE, 0xEF, 0x00, 0x00, 0x00, 0x00, 0x00};
     can->Send(0x697, bytes, 8);

@@ -47,8 +47,7 @@ static const float CAP_TOL = 0.30f;          // reject sample >30% off current c
 static const float CAP_MIN = 50.0f;          // flash / learn sanity, matches PARAM
 static const float CAP_MAX = 500.0f;
 static const float CAP_DEF = 215.0f;         // BMS_CapActual default, Ah at 4200 mV in the table
-static const float WHKM_ALPHA = 0.20f;       // EWMA on a 20 km window
-static const float WHKM_KM = 20.0f;
+static const float WHKM_KM = 20.0f;          // trailing filter length
 static const float WHKM_VMIN = 5.0f;         // skip idle
 static const float WHKM_MIN = 50.0f;         // flash / learn sanity, matches PARAM
 static const float WHKM_MAX = 500.0f;
@@ -118,7 +117,7 @@ static uint16_t offTicks = SETTLE_TICKS;  // settle time; boot counts as settled
 static int prevMode;
 static float prevF;              // table f at previous settled start, for capacity
 static bool prevValid;
-static float whAcc, kmAcc;       // 20 km Wh/km window
+static float whkFilt;            // Wh/km filter state; the param holds only 1/32 steps
 static float storedCap, storedWhk, storedF = -1.0f;  // last flash commit
 
 /* Restore f, cap, Wh/km. Blank page keeps parm_load defaults. */
@@ -301,24 +300,21 @@ void Task100Ms()
    }
    if (started) offTicks = 0;
 
-   /* Net pack Wh per km while moving. -idc so regen credits. */
+   /* Net pack Wh per km while moving, trailing filter over WHKM_KM: each km driven
+    * moves the value 1/WHKM_KM of the way to the consumption of that km. -idc so regen credits.
+    * A param that differs from the filter by more than its 1/32 step was set from flash,
+    * the terminal or the web interface, and restarts the filter there. */
    if (mode == MOD_RUN)
    {
       float speed = Param::GetFloat(Param::Veh_Speed);
       if (speed >= WHKM_VMIN)
       {
-         whAcc += Param::GetFloat(Param::udc2) * (-idc) * TICK_S / 3600.0f;
-         kmAcc += speed * TICK_S / 3600.0f;
-      }
-      if (kmAcc >= WHKM_KM)
-      {
-         float inst = whAcc / kmAcc;
-         if (inst >= WHKM_MIN && inst <= WHKM_MAX)
-         {
-            float whk = Param::GetFloat(Param::BMS_WhPerKm);
-            Param::SetFloat(Param::BMS_WhPerKm, whk + WHKM_ALPHA * (inst - whk));
-         }
-         whAcc = kmAcc = 0.0f;
+         float whkParam = Param::GetFloat(Param::BMS_WhPerKm);
+         if (fabsf(whkParam - whkFilt) > 0.05f) whkFilt = whkParam;
+         float wh = Param::GetFloat(Param::udc2) * (-idc) * TICK_S / 3600.0f;
+         float km = speed * TICK_S / 3600.0f;
+         whkFilt = MAX(MIN(whkFilt + (wh - whkFilt * km) / WHKM_KM, WHKM_MAX), WHKM_MIN);
+         Param::SetFloat(Param::BMS_WhPerKm, whkFilt);
       }
    }
 

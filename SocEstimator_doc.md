@@ -31,7 +31,7 @@ opmode, idc ----------------------> settle time -------> start correction or res
 BMS_Vmin, start or rest ----------> OCV table ---------> correction of f
 f, BMS_CapActual, limits ---------> window ------------> SOC, AMPh, KWh, BMS_KmRem
 BMS_Vmin, idc, BMS_Rpack ---------> IR compensation ---> BMS_OcvCell
-udc2, idc, Veh_Speed -------------> 20 km window ------> BMS_WhPerKm
+udc2, idc, Veh_Speed -------------> 20 km filter ------> BMS_WhPerKm
 f, BMS_CapActual, BMS_WhPerKm ----> record, in OFF only
 ```
 
@@ -58,7 +58,7 @@ f, BMS_CapActual, BMS_WhPerKm ----> record, in OFF only
 7. The code publishes `BMS_OcvCell`.
 8. The code detects the start of RUN or CHARGE.
 9. The code applies the start correction or the rest correction.
-10. In RUN, the code adds to the Wh/km sum.
+10. In RUN, the code updates the Wh/km filter.
 11. The code calculates the displayed window and publishes the values.
 
 Step 1 runs also when `BMS_Vmin` is invalid. Step 8 compares `opmode` with the `opmode` of the last valid tick. A start during invalid `BMS_Vmin` is detected at the first valid tick.
@@ -149,14 +149,21 @@ A rest correction takes no sample. After a short rest, `BMS_Vmin` reads low, and
 
 ## Wh/km learning
 
-`BMS_WhPerKm` is the net pack energy per km. In RUN and above the minimum speed, the code sums `udc2 * -idc`. `idc` is positive during regeneration, so regeneration lowers the sum. At the end of each window, the code applies an EWMA if the sample is inside the accepted range.
+`BMS_WhPerKm` is the net pack energy per km over the last 20 km. In RUN and above the minimum speed, a filter updates the value on each tick:
+
+```
+Wh/km = Wh/km + (udc2 * -idc * 0.1 / 3600 - Wh/km * km) / 20
+```
+
+`km` is the distance of the tick. Each km driven moves the value 1/20 of the way to the consumption of that km. `idc` is positive during regeneration, so regeneration lowers the value. Every drive updates the value, also a drive shorter than 20 km.
+
+The filter state is a float in RAM, because the parameter holds steps of 1/32. If the parameter differs from the filter state by more than 0.05, the filter restarts at the parameter value. A flash load, `socreset` and the web interface set the parameter.
 
 | Item | Value |
 |---|---|
-| Window | 20 km |
+| Filter length | 20 km |
 | Minimum speed | 5 km/h |
-| Accepted range | 50 Wh/km to 500 Wh/km |
-| EWMA gain | 0.20 |
+| Range | 50 Wh/km to 500 Wh/km |
 | Default | 130 Wh/km |
 
 ## OCV table
