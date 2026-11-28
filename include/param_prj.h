@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define VER 2.30.WIM.15
+#define VER 2.30.WIM.16
 
 
 /* Entries must be ordered as follows:
@@ -90,11 +90,9 @@
     PARAM_ENTRY(CAT_CRUISE,    regenlevel,  "",        0,       3,      2,      31 ) \
     PARAM_ENTRY(CAT_CONTACT,   cruiselight, ONOFF,     0,       1,      0,      33 ) \
     PARAM_ENTRY(CAT_CONTACT,   errlights,   ERRLIGHTS, 0,       255,    0,      34 ) \
-    PARAM_ENTRY(CAT_CHARGER,   BattCap,     "kWh",     0.1,     250,    22,     38 ) \
     PARAM_ENTRY(CAT_CHARGER,   PwrAcMax,    "W",       0,       12000,  9000,   41 ) \
     PARAM_ENTRY(CAT_CHARGER,   PwrCcsMax,   "kW",      0,       350,    50,     153 ) \
     PARAM_ENTRY(CAT_CHARGER,   ChgSocLimit, "%",       0,       100,    100,    44 ) \
-    PARAM_ENTRY(CAT_CHARGER,   SOCFC,       "%",       0,       100,    50,     79 ) \
     PARAM_ENTRY(CAT_CHARGER,   Chgctrl,     CHGCTRL,   0,       2,      0,      45 ) \
     PARAM_ENTRY(CAT_CHARGER,   ChgEff,     "%",        0,       100,    90,     121) \
     PARAM_ENTRY(CAT_CHARGER,   ConfigFoccci,  ONOFF,   0,       1,      0,      133) \

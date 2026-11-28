@@ -42,7 +42,6 @@ namespace utils
     float GetUserThrottleCommand(CanHardware*);
     float ProcessThrottle(int);
     float ProcessUdc(int);
-    void CalcSOC();
     void GetDigInputs(CanHardware*);
     void PostErrorIfRunning(ERROR_MESSAGE_NUM);
     void SelectDirection(Vehicle* , Shifter*);

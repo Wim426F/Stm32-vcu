@@ -445,11 +445,6 @@ static void Ms100Task(void)
     int opmode = Param::GetInt(Param::opmode);
     utils::SelectDirection(selectedVehicle, selectedShifter);
 
-    if(Param::GetInt(Param::ShuntType) != 0)//Do not do any SOC calcs
-    {
-        //utils::CalcSOC();
-    }
-
     Param::SetInt(Param::cruisestt, selectedVehicle->GetCruiseState());
     Param::SetFloat(Param::FrontRearBal, selectedVehicle->GetFrontRearBalance());
 

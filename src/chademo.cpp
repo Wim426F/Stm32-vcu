@@ -225,7 +225,7 @@ void FCChademo::Task200Ms()
    }
 
    FCChademo::SetTargetBatteryVoltage(Param::GetInt(Param::Voltspnt)+10);
-   FCChademo::SetSoC(Param::GetFloat(Param::SOCFC));
+   FCChademo::SetSoC(Param::GetFloat(Param::SOC));
    Param::SetInt(Param::CCS_Ireq, FCChademo::GetRampedCurrentRequest());
 
    if (Param::GetFloat(Param::PwrCcsMax) < 0.1f)

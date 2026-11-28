@@ -36,7 +36,6 @@ namespace utils
 
 #define CAN_TIMEOUT       1  //1000ms
 
-float SOCVal=0;
 int32_t NetWh=0;
 
 bool Timer1Run = false;
@@ -448,16 +447,16 @@ void displayThrottle()
 }
 
 
-void CalcSOC()
-{
-    float Capacity_Parm = Param::GetFloat(Param::BattCap);
-    float kwh_Used = ABS(Param::GetFloat(Param::KWh));
-
-    SOCVal = 100.0f - 100.0f * kwh_Used / Capacity_Parm;
-
-    if(SOCVal > 100) SOCVal = 100;
-    Param::SetFloat(Param::SOC,SOCVal);
-}
+//void CalcSOC()
+//{
+//    float Capacity_Parm = Param::GetFloat(Param::BattCap);
+//    float kwh_Used = ABS(Param::GetFloat(Param::KWh));
+//
+//    SOCVal = 100.0f - 100.0f * kwh_Used / Capacity_Parm;
+//
+//    if(SOCVal > 100) SOCVal = 100;
+//    Param::SetFloat(Param::SOC,SOCVal);
+//}
 
 void ProcessCruiseControlButtons()
 {

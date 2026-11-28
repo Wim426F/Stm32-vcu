@@ -323,9 +323,7 @@ void i3LIMClass::Task10Ms()
     }
     int32_t I_Batt=(int32_t)(amps*10.0f)+8192;//scale 0.1, offset 819.2, so raw 8192 = 0A
     //I_Batt=0xa0a0;
-    //uint16_t SOC_Local=25*10;//(Param::GetInt(Param::SOC))*10;
-    //uint16_t SOC_Local=(Param::GetInt(Param::SOC))*10;
-    uint16_t SOC_Local=(Param::GetInt(Param::SOCFC))*10;
+    uint16_t SOC_Local=(uint16_t)(Param::GetFloat(Param::SOC)*10.0f);
     uint8_t bytes[8]; //seems to be from i3 BMS.
     bytes[0] = I_Batt & 0xFF;  //Battery current LSB. Scale 0.1 offset 819.2. 16 bit unsigned int
     bytes[1] = I_Batt >> 8;  //Battery current MSB. Scale 0.1 offset 819.2.  16 bit unsigned int
@@ -383,8 +381,7 @@ void i3LIMClass::Task200Ms()
 //Possibly needed for dc ccs.
 ////////////////////////////////////
 
-    //uint16_t SOC_Local=(Param::GetInt(Param::SOC))*2;
-    uint16_t SOC_Local=(Param::GetInt(Param::SOCFC))*2;
+    uint16_t SOC_Local=(uint16_t)(Param::GetFloat(Param::SOC)*2.0f);
     bytes[0] = 0x2c;//BMS soc msg. May need to be dynamic
     bytes[1] = 0xe2;
     bytes[2] = 0x10;
@@ -562,8 +559,7 @@ void i3LIMClass::Task100Ms()
     bytes[7] = 0xff;
     can->Send(0x03c, (uint32_t*)bytes,8); //average 100ms
 
-    //uint16_t Wh_Local=Param::GetFloat(Param::BattCap);
-    uint16_t Wh_Local=(uint16_t)(Param::GetFloat(Param::BattCap)*1000);  // Wh or kWh? FIMXE
+    uint16_t Wh_Local=(uint16_t)(Param::GetFloat(Param::BMS_KwhUsable)*1000.0f);  //usable capacity in Wh
     CHG_Pwr=(CHG_Pwr & 0xFFF);
     
     bytes[0] = Wh_Local & 0xFF;  //Battery Wh lowbyte
@@ -624,7 +620,7 @@ void i3LIMClass::Task100Ms()
             //0 for the whole session, which the LIM reads as "already complete". Derive it from
             //the announced power so it tracks the same figure as CHG_Pwr and I_Batt.
             uint32_t announcedW=AnnouncedChargeW();
-            float remainWh=Param::GetFloat(Param::BattCap)*1000.0f*
+            float remainWh=Param::GetFloat(Param::BMS_KwhUsable)*1000.0f*
                            (100.0f-Param::GetFloat(Param::SOC))/100.0f;
             if(remainWh < 0) remainWh = 0;
             uint32_t units=(uint32_t)((remainWh*360.0f)/announcedW);//Wh/W = hours -> 10s units
@@ -701,7 +697,7 @@ void i3LIMClass::CCS_Pwr_Con()    //here we control ccs charging during state 6.
 }
 
 //FIXME: open-loop timers, only used by the DC state machine (called from case 6 only).
-//Revisit together with the AC path in Task100Ms, which derives Full_SOCt from BattCap/SOC and
+//Revisit together with the AC path in Task100Ms, which derives Full_SOCt from BMS_KwhUsable/SOC and
 //the announced charge power instead. Known problems:
 // - seeded at line ~773 in units of 1s (Bulk 1800 "30 mins", Full 2400 "40 mins") but the
 //   0x2F1 field scale is 10s per count, so it actually transmits 5h and 6.7h
